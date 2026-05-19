@@ -22,29 +22,28 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="OmniGrid"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OmniGrid">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        
         <service
-    android:name="com.cyber.omnigrid.core.os.service.ExecutionForegroundService"
-    android:enabled="true"
-    android:exported="false"
-    android:foregroundServiceType="connectedDevice" />
+            android:name="com.cyber.omnigrid.core.os.service.ExecutionForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
         
         <!-- Tu MainActivity existente se mantiene igual -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.OmniGrid">
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- El Foreground Service se añadirá en la siguiente etapa -->
     </application>
 
 </manifest>
