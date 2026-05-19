@@ -19,7 +19,7 @@ object OmniColors {
     val AccentCyan = Color(0xFF00E5FF)       // Ejecución / Payload
     val AccentAmber = Color(0xFFFF9100)      // Alertas / Telemetría
     val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0 blockquote -> 0xFF888888)
+    val TextSecondary = Color(0xFF888888)    // Sintaxis corregida
 }
 
 @Composable
