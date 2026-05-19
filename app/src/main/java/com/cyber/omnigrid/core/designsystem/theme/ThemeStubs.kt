@@ -7,9 +7,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-// Paleta de colores Flagship (Nothing OS / Flipper Zero hybrid)
+// EXPOSICIÓN GLOBAL: Requisito explícito de importación en MainActivity.kt
+val TrueBlack = Color(0xFF050505) // Negro Puro Absoluto Flagship
+
 object OmniColors {
-    val Background = Color(0xFF050505)       // Negro Puro Absoluto
+    val Background = TrueBlack
     val SurfaceCard = Color(0xFF111111)      // Gris carbón profundo para CyberCards
     val BorderMuted = Color(0xFF222222)      // Bordes limpios de un píxel
     val BorderActive = Color(0xFF444444)     // Bordes para estados enfocados
@@ -19,7 +21,7 @@ object OmniColors {
     val AccentCyan = Color(0xFF00E5FF)       // Ejecución / Payload
     val AccentAmber = Color(0xFFFF9100)      // Alertas / Telemetría
     val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0xFF888888)    // Sintaxis corregida
+    val TextSecondary = Color(0xFF888888)
 }
 
 @Composable
