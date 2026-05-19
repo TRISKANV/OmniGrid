@@ -1,5 +1,6 @@
 package com.cyber.omnigrid.navigation
 
+import android.util.Log
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -25,6 +26,8 @@ fun OmniNavHost(
     payloadViewModel: PayloadViewModel,
     modifier: Modifier = Modifier
 ) {
+    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Configurando Grafo. Destino inicial: ${Screen.Dashboard.route}")
+    
     NavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
@@ -45,13 +48,17 @@ fun OmniNavHost(
         
         // --- DASHBOARD FEATURE ---
         composable(route = Screen.Dashboard.route) {
+            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando composable en ruta: ${Screen.Dashboard.route}")
             OmniDashboardScreen(
                 onNavigateToLiveExecution = { actionType ->
+                    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] interceptado onNavigateToLiveExecution con argumento: $actionType")
                     if (actionType == "new_payload") {
                         navController.navigate(Screen.PayloadList.createRoute(workspaceId = "default_ws"))
                     }
                 },
-                onNavigateToSettings = { /* Futuro */ }
+                onNavigateToSettings = { 
+                    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] interceptado onNavigateToSettings")
+                }
             )
         }
 
@@ -61,6 +68,7 @@ fun OmniNavHost(
             arguments = listOf(navArgument("workspaceId") { type = NavType.StringType })
         ) { backStackEntry ->
             val workspaceId = backStackEntry.arguments?.getString("workspaceId") ?: "default_ws"
+            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando PayloadList con workspaceId: $workspaceId")
             
             PayloadListScreen(
                 viewModel = payloadViewModel,
@@ -82,6 +90,7 @@ fun OmniNavHost(
             )
         ) { backStackEntry ->
             val payloadId = backStackEntry.arguments?.getString("payloadId")
+            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando PayloadEditor con payloadId: $payloadId")
             
             PayloadEditorScreen(
                 viewModel = payloadViewModel,
@@ -96,20 +105,14 @@ fun OmniNavHost(
             arguments = listOf(navArgument("payloadId") { type = NavType.StringType })
         ) { backStackEntry ->
             val payloadId = backStackEntry.arguments?.getString("payloadId") ?: ""
+            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando LiveExecution con payloadId: $payloadId")
             
             val executionViewModel: ExecutionViewModel = viewModel()
             
             val demoScript = """
                 DEFAULTDELAY 200
-                REM Abriendo prompt de comandos en entorno simulado
+                REM Script de prueba activo
                 GUI r
-                DELAY 500
-                STRING powershell -NoProfile -ExecutionPolicy Bypass
-                ENTER
-                DELAY 1000
-                REM Ejecutando payload de recolección de metadatos de red
-                STRING Write-Host 'OmniGrid Core Engine V1 Active' -ForegroundColor Cyan
-                ENTER
             """.trimIndent()
             
             LiveExecutionScreen(
