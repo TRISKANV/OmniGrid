@@ -27,6 +27,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.OmniGrid">
+        <service
+    android:name="com.cyber.omnigrid.core.os.service.ExecutionForegroundService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="connectedDevice" />
         
         <!-- Tu MainActivity existente se mantiene igual -->
         <activity
