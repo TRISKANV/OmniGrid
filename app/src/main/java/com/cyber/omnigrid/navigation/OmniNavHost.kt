@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -19,6 +18,24 @@ import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadEditorS
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadListScreen
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadViewModel
 import com.cyber.omnigrid.feature.dashboard.presentation.OmniDashboardScreen
+
+// --- ESTRUCTURA DE NAVEGACIÓN (Soluciona el error de compilación por falta de Screen) ---
+sealed class Screen(val route: String) {
+    object Dashboard : Screen("dashboard")
+    
+    object PayloadList : Screen("payload_list/{workspaceId}") {
+        fun createRoute(workspaceId: String) = "payload_list/$workspaceId"
+    }
+    
+    object PayloadEditor : Screen("payload_editor/{workspaceId}?payloadId={payloadId}") {
+        fun createRoute(workspaceId: String, payloadId: String?) = 
+            "payload_editor/$workspaceId" + if (payloadId != null) "?payloadId=$payloadId" else ""
+    }
+    
+    object LiveExecution : Screen("live_execution/{payloadId}") {
+        fun createRoute(payloadId: String) = "live_execution/$payloadId"
+    }
+}
 
 @Composable
 fun OmniNavHost(
