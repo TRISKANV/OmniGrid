@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
+    // Habilitamos KAPT para que compile las anotaciones de Room (@Database, @Dao)
+    id("kotlin-kapt")
 }
 
 android {
@@ -9,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.cyber.omnigrid"
-        minSdk = 26 // Necesario para la API de Crypto moderna
+        minSdk = 26 
         targetSdk = 34
         versionCode = 1
         versionName = "1.0-alpha"
@@ -37,7 +39,6 @@ android {
 }
 
 dependencies {
-    // Dependencias base actuales
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -46,17 +47,14 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.material3)
 
-    // =================================================================
-    // NUEVAS DEPENDENCIAS PARA SOLUCIONAR ERRORES DE COMPILACIÓN (#69)
-    // =================================================================
-    
-    // Jetpack Navigation Compose (Soluciona rememberNavController, NavHost, etc.)
+    // Jetpack Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // Room Database (Soluciona la persistencia local y OmniGridDatabase)
+    // Room Database + Procesador KAPT
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1") // <--- CRUCIAL: Genera OmniGridDatabase
 
-    // Lifecycle ViewModel Compose (Soluciona el uso de la función inline viewModel())
+    // Lifecycle ViewModel Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 }
