@@ -2,7 +2,9 @@ package com.cyber.omnigrid.feature.automation.presentation.execution
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cyber.omnigrid.feature.automation.data.hid.MockHidAdapter
 import com.cyber.omnigrid.feature.automation.domain.engine.*
+import com.cyber.omnigrid.feature.automation.domain.engine.hid.BluetoothHidExecutor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,11 @@ data class ExecutionUiState(
 )
 
 class ExecutionViewModel(
-    private val engine: OmniExecutionEngine = OmniExecutionEngine(DuckyScriptParser(), MockBluetoothExecutor())
+    // Arquitectura Inyectada: Motor General -> Puente Bluetooth -> Adaptador de Transporte Simulado
+    private val engine: OmniExecutionEngine = OmniExecutionEngine(
+        parser = DuckyScriptParser(),
+        executor = BluetoothHidExecutor(transportAdapter = MockHidAdapter())
+    )
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExecutionUiState())
@@ -28,9 +34,8 @@ class ExecutionViewModel(
     private var executionJob: Job? = null
 
     fun startExecution(scriptContent: String) {
-        // Cancelar cualquier ejecución previa redundante por seguridad
         executionJob?.cancel()
-        _uiState.value = ExecutionUiState() // Reset completo de la consola
+        _uiState.value = ExecutionUiState() 
 
         executionJob = viewModelScope.launch {
             engine.execute(scriptContent).collect { event ->
