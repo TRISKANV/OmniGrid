@@ -37,6 +37,7 @@ android {
 }
 
 dependencies {
+    // Dependencias base actuales
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -44,4 +45,18 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.material3)
+
+    // =================================================================
+    // NUEVAS DEPENDENCIAS PARA SOLUCIONAR ERRORES DE COMPILACIÓN (#69)
+    // =================================================================
+    
+    // Jetpack Navigation Compose (Soluciona rememberNavController, NavHost, etc.)
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Room Database (Soluciona la persistencia local y OmniGridDatabase)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+
+    // Lifecycle ViewModel Compose (Soluciona el uso de la función inline viewModel())
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 }
