@@ -7,12 +7,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.cyber.omnigrid.feature.automation.presentation.LiveExecutionScreen
+import com.cyber.omnigrid.feature.automation.presentation.execution.ExecutionViewModel
+import com.cyber.omnigrid.feature.automation.presentation.execution.LiveExecutionScreen
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadEditorScreen
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadListScreen
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadViewModel
@@ -21,10 +23,9 @@ import com.cyber.omnigrid.feature.dashboard.presentation.OmniDashboardScreen
 @Composable
 fun OmniNavHost(
     navController: NavHostController,
-    payloadViewModel: PayloadViewModel, // Inyectado desde nivel superior (o vía Hilt/Koin en el futuro)
+    payloadViewModel: PayloadViewModel,
     modifier: Modifier = Modifier
 ) {
-    // NavHost con animaciones premium globales por defecto (Crossfade sutil y Slide suave)
     NavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
@@ -47,7 +48,6 @@ fun OmniNavHost(
         composable(route = Screen.Dashboard.route) {
             OmniDashboardScreen(
                 onNavigateToLiveExecution = { actionType ->
-                    // Por ahora usamos un ID hardcodeado para la prueba del MVP
                     if (actionType == "new_payload") {
                         navController.navigate(Screen.PayloadList.createRoute(workspaceId = "default_ws"))
                     }
@@ -95,9 +95,31 @@ fun OmniNavHost(
         composable(
             route = Screen.LiveExecution.route,
             arguments = listOf(navArgument("payloadId") { type = NavType.StringType })
-        ) {
-            // Pasaremos el payloadId al motor cuando lo conectemos a la DB
-            LiveExecutionScreen()
+        ) { backStackEntry ->
+            val payloadId = backStackEntry.arguments?.getString("payloadId") ?: ""
+            
+            // Instanciar un ViewModel específico para esta sesión de inyección
+            val executionViewModel: ExecutionViewModel = viewModel()
+            
+            // Script Ducky estructurado de prueba para validar el motor cinemático
+            val demoScript = """
+                DEFAULTDELAY 200
+                REM Abriendo prompt de comandos en entorno simulado
+                GUI r
+                DELAY 500
+                STRING powershell -NoProfile -ExecutionPolicy Bypass
+                ENTER
+                DELAY 1000
+                REM Ejecutando payload de recolección de metadatos de red
+                STRING Write-Host 'OmniGrid Core Engine V1 Active' -ForegroundColor Cyan
+                ENTER
+            """.trimIndent()
+            
+            LiveExecutionScreen(
+                viewModel = executionViewModel,
+                scriptContent = demoScript,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }
