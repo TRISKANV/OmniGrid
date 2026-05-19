@@ -19,24 +19,6 @@ import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadListScr
 import com.cyber.omnigrid.feature.automation.presentation.manager.PayloadViewModel
 import com.cyber.omnigrid.feature.dashboard.presentation.OmniDashboardScreen
 
-// --- ESTRUCTURA DE NAVEGACIÓN (Soluciona el error de compilación por falta de Screen) ---
-sealed class Screen(val route: String) {
-    object Dashboard : Screen("dashboard")
-    
-    object PayloadList : Screen("payload_list/{workspaceId}") {
-        fun createRoute(workspaceId: String) = "payload_list/$workspaceId"
-    }
-    
-    object PayloadEditor : Screen("payload_editor/{workspaceId}?payloadId={payloadId}") {
-        fun createRoute(workspaceId: String, payloadId: String?) = 
-            "payload_editor/$workspaceId" + if (payloadId != null) "?payloadId=$payloadId" else ""
-    }
-    
-    object LiveExecution : Screen("live_execution/{payloadId}") {
-        fun createRoute(payloadId: String) = "live_execution/$payloadId"
-    }
-}
-
 @Composable
 fun OmniNavHost(
     navController: NavHostController,
@@ -115,10 +97,8 @@ fun OmniNavHost(
         ) { backStackEntry ->
             val payloadId = backStackEntry.arguments?.getString("payloadId") ?: ""
             
-            // Instanciar un ViewModel específico para esta sesión de inyección
             val executionViewModel: ExecutionViewModel = viewModel()
             
-            // Script Ducky estructurado de prueba para validar el motor cinemático
             val demoScript = """
                 DEFAULTDELAY 200
                 REM Abriendo prompt de comandos en entorno simulado
