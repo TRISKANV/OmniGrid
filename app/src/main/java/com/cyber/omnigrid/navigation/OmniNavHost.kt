@@ -2,7 +2,8 @@ package com.cyber.omnigrid.navigation
 
 import android.util.Log
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -26,50 +27,45 @@ fun OmniNavHost(
     payloadViewModel: PayloadViewModel,
     modifier: Modifier = Modifier
 ) {
-    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Configurando Grafo. Destino inicial: ${Screen.Dashboard.route}")
-    
+    val motionSpec = spring<androidx.compose.ui.unit.IntOffset>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessLow
+    )
+    val fadeSpec = spring<Float>(stiffness = Spring.StiffnessLow)
+
     NavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
         modifier = modifier,
         enterTransition = {
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300))
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = motionSpec) + fadeIn(animationSpec = fadeSpec)
         },
-        exitTransition = {
-            fadeOut(animationSpec = tween(300))
-        },
+        exitTransition = { fadeOut(animationSpec = fadeSpec) },
         popEnterTransition = {
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300))
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = motionSpec) + fadeIn(animationSpec = fadeSpec)
         },
         popExitTransition = {
-            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = motionSpec) + fadeOut(animationSpec = fadeSpec)
         }
     ) {
-        
-        // --- DASHBOARD FEATURE ---
+        // --- DASHBOARD ---
         composable(route = Screen.Dashboard.route) {
-            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando composable en ruta: ${Screen.Dashboard.route}")
             OmniDashboardScreen(
                 onNavigateToLiveExecution = { actionType ->
-                    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] interceptado onNavigateToLiveExecution con argumento: $actionType")
                     if (actionType == "new_payload") {
                         navController.navigate(Screen.PayloadList.createRoute(workspaceId = "default_ws"))
                     }
                 },
-                onNavigateToSettings = { 
-                    Log.d("OMNI_BOOTSTRAP", "[NAVHOST] interceptado onNavigateToSettings")
-                }
+                onNavigateToSettings = { }
             )
         }
 
-        // --- AUTOMATION FEATURE (PAYLOADS) ---
+        // --- AUTOMATION (PAYLOADS) ---
         composable(
             route = Screen.PayloadList.route,
             arguments = listOf(navArgument("workspaceId") { type = NavType.StringType })
         ) { backStackEntry ->
             val workspaceId = backStackEntry.arguments?.getString("workspaceId") ?: "default_ws"
-            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando PayloadList con workspaceId: $workspaceId")
-            
             PayloadListScreen(
                 viewModel = payloadViewModel,
                 onNavigateToEditor = { payloadId ->
@@ -82,16 +78,10 @@ fun OmniNavHost(
             route = Screen.PayloadEditor.route,
             arguments = listOf(
                 navArgument("workspaceId") { type = NavType.StringType },
-                navArgument("payloadId") { 
-                    type = NavType.StringType 
-                    nullable = true 
-                    defaultValue = null 
-                }
+                navArgument("payloadId") { type = NavType.StringType; nullable = true; defaultValue = null }
             )
         ) { backStackEntry ->
             val payloadId = backStackEntry.arguments?.getString("payloadId")
-            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando PayloadEditor con payloadId: $payloadId")
-            
             PayloadEditorScreen(
                 viewModel = payloadViewModel,
                 payloadId = payloadId,
@@ -99,25 +89,15 @@ fun OmniNavHost(
             )
         }
 
-        // --- LIVE EXECUTION FEATURE ---
+        // --- LIVE EXECUTION ---
         composable(
             route = Screen.LiveExecution.route,
             arguments = listOf(navArgument("payloadId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val payloadId = backStackEntry.arguments?.getString("payloadId") ?: ""
-            Log.d("OMNI_BOOTSTRAP", "[NAVHOST] Montando LiveExecution con payloadId: $payloadId")
-            
             val executionViewModel: ExecutionViewModel = viewModel()
-            
-            val demoScript = """
-                DEFAULTDELAY 200
-                REM Script de prueba activo
-                GUI r
-            """.trimIndent()
-            
             LiveExecutionScreen(
                 viewModel = executionViewModel,
-                scriptContent = demoScript,
+                scriptContent = "DEFAULTDELAY 200\nREM OmniGrid Live\nGUI r",
                 onNavigateBack = { navController.popBackStack() }
             )
         }
