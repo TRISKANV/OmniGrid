@@ -15,45 +15,72 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
+import kotlinx.coroutines.delay
 
-// ==========================================
-// ARCHITECTURE DEFINITIONS
-// ==========================================
-enum class ModuleSize {
-    SMALL, // Cuadrado, ocupa 1 columna (ej: Hardware monitor)
-    WIDE   // Rectangular, ocupa 2 columnas (ej: Network OSINT)
-}
+// --- ARCHITECTURE DEFINITIONS ---
+enum class ModuleSize { SMALL, WIDE }
 
 data class DashboardPlugin(
     val id: String,
     val title: String,
     val size: ModuleSize,
-    val content: @Composable () -> Unit
+    val content: @Composable (metrics: RuntimeMetrics) -> Unit
 )
 
-// ==========================================
-// MAIN DASHBOARD RUNTIME
-// ==========================================
+// --- MAIN RUNTIME DASHBOARD ---
 @Composable
 fun ModularDashboardScreen() {
-    // Estado unificado para el control del Diagnostics Drawer
     var diagnosticsOpen by remember { mutableStateOf(false) }
+    
+    // Recolección centralizada de las métricas de hardware y de los hilos del Core
+    val sysMetrics by RuntimeTelemetryManager.metrics.collectAsState()
 
-    val activePlugins = listOf(
-        DashboardPlugin("sys_health", "RUNTIME HEALTH", ModuleSize.WIDE) { HealthModuleContent() },
-        DashboardPlugin("net_flow", "ACTIVE FLOWS", ModuleSize.SMALL) { Text("0 TCP", color = TacticalColors.TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
-        DashboardPlugin("queue", "QUEUE SIZE", ModuleSize.SMALL) { Text("0/128", color = TacticalColors.TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace) }
-    )
+    // Bucle cíclico aislado de refresco de hardware de bajo coste (evita saturar el hilo UI)
+    LaunchedEffect(Unit) {
+        while (true) {
+            RuntimeTelemetryManager.updateSystemMemory()
+            delay(1000) // Muestreo de memoria cada 1 segundo exacto
+        }
+    }
+
+    val activePlugins = remember {
+        listOf(
+            DashboardPlugin("sys_health", "RUNTIME HEALTH", ModuleSize.WIDE) { metrics ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("JVM STACK STORAGE", color = TacticalColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                        Text(String.format("%.1f MB", metrics.memoryUsageMb), color = TacticalColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    }
+                    TinyWaveform()
+                }
+            },
+            DashboardPlugin("net_flow", "ACTIVE SCHEDULERS", ModuleSize.SMALL) { metrics ->
+                Column {
+                    Text("${metrics.activeCoroutines} Coroutines", color = TacticalColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("Background Scope", color = TacticalColors.TextSecondary, fontSize = 11.sp)
+                }
+            },
+            DashboardPlugin("queue", "DATA PIPELINE QUEUE", ModuleSize.SMALL) { metrics ->
+                Column {
+                    Text("${metrics.queueSize} / 128", color = TacticalColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("Buffer Status: NOMINAL", color = Color(0xFF00FF66), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        )
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(TacticalColors.OledBlack)
     ) {
-        // Capa 1: Contenido del Dashboard Base
         Column(modifier = Modifier.fillMaxSize()) {
             
-            // HUD Top-Bar Operativa
+            // --- RUNTIME TOP BAR ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -63,22 +90,21 @@ fun ModularDashboardScreen() {
             ) {
                 Column {
                     Text(
-                        text = "OMNIGRID // ENGINE",
+                        text = "OMNIGRID // ECOSYSTEM",
                         color = TacticalColors.TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.5).sp
                     )
                     Text(
-                        text = "NODE STATUS: NOMINAL",
-                        color = Color(0xFF00FF66),
+                        text = "ENGINE STATE: ${sysMetrics.transportState}",
+                        color = if (sysMetrics.transportState == "STANDBY") TacticalColors.TextSecondary else Color(0xFF00E5FF),
                         fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                // Disparador de Observabilidad
                 Box(
                     modifier = Modifier
                         .border(1.dp, if(diagnosticsOpen) TacticalColors.SystemWarning else TacticalColors.BorderGlass, RoundedCornerShape(4.dp))
@@ -87,7 +113,7 @@ fun ModularDashboardScreen() {
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = if(diagnosticsOpen) "DIAG_ACTIVE" else "DIAGNOSTICS //",
+                        text = if(diagnosticsOpen) "HUD_ACTIVE" else "OBSERVE_ENV //",
                         color = if(diagnosticsOpen) TacticalColors.SystemWarning else TacticalColors.TextSecondary,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
@@ -96,7 +122,7 @@ fun ModularDashboardScreen() {
                 }
             }
 
-            // Grid Asimétrico de Plugins Visuales
+            // --- GRID ASIMÉTRICO DE PLUGINS REACCIONANDO AL BUS ---
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
                 contentPadding = PaddingValues(16.dp),
@@ -105,15 +131,13 @@ fun ModularDashboardScreen() {
                 modifier = Modifier.fillMaxSize().weight(1f)
             ) {
                 items(activePlugins, key = { it.id }) { plugin ->
-                    PluginContainer(plugin = plugin)
+                    PluginContainer(plugin = plugin, metrics = sysMetrics)
                 }
             }
         }
 
-        // Capa 2: Efectos Cinemáticos Ambientales Subconscientes
         ScanlineOverlay(modifier = Modifier.fillMaxSize())
 
-        // Capa 3: Diagnostics Drawer (Efecto Glass superior con Blur Localizado)
         TacticalDiagnosticsDrawer(
             visible = diagnosticsOpen,
             onClose = { diagnosticsOpen = false },
@@ -122,11 +146,8 @@ fun ModularDashboardScreen() {
     }
 }
 
-// ==========================================
-// PLUGIN RENDERER
-// ==========================================
 @Composable
-fun PluginContainer(plugin: DashboardPlugin) {
+fun PluginContainer(plugin: DashboardPlugin, metrics: RuntimeMetrics) {
     val modifier = if (plugin.size == ModuleSize.WIDE) {
         Modifier.fillMaxWidth()
     } else {
@@ -151,32 +172,13 @@ fun PluginContainer(plugin: DashboardPlugin) {
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                
                 if (plugin.id == "sys_health") {
                     BreathingIndicator()
                 }
             }
             
             Spacer(modifier = Modifier.height(12.dp))
-            plugin.content()
+            plugin.content(metrics)
         }
-    }
-}
-
-// ==========================================
-// WIDGET CONTENT DEFINITIONS
-// ==========================================
-@Composable
-private fun HealthModuleContent() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text("SYS_UPTIME", color = TacticalColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-            Text("04:12:09", color = TacticalColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
-        }
-        TinyWaveform()
     }
 }
