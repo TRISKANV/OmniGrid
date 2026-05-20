@@ -82,8 +82,10 @@ object RuntimeSessionManager {
 }
 
 // ==========================================================================
-// 3. PLUGIN INFRASTRUCTURE CONTRACT
+// 3. PLUGIN INFRASTRUCTURE CONTRACT & LAYOUT DEFINITIONS
 // ==========================================================================
+enum class ModuleSize { SMALL, WIDE }
+
 data class PluginMetadata(
     val id: String,
     val name: String,
