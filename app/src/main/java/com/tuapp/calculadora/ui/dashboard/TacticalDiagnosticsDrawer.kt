@@ -26,7 +26,6 @@ import java.util.Locale
 
 @Composable
 fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
-    // 1. Conexión reactiva a la nueva plataforma (Reemplaza a los viejos logHistory y metrics)
     val logs by RuntimeTelemetryManager.logs.collectAsState()
     val session = SessionOrchestrator.getSessionManifest()
     val thermal = OmniDeviceHAL.fetchThermalProfile()
@@ -50,7 +49,7 @@ fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- MÉTRICAS EN TIEMPO REAL (El reemplazo de la variable "metrics") ---
+        // --- MÉTRICAS EN TIEMPO REAL ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -80,7 +79,7 @@ fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- RENDERIZADO DE LOGS (Arreglo del "when" exhaustivo y propiedades faltantes) ---
+        // --- RENDERIZADO DE LOGS ---
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -89,22 +88,20 @@ fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
                 .padding(8.dp)
         ) {
             items(logs) { log ->
-                // Solución al error: El when ahora tiene cobertura absoluta sobre el enum LogLevel
                 val color = when (log.level) {
-                    LogLevel.INFO -> Color(0xFF00FF66) // Verde Hacker
-                    LogLevel.WARN -> Color(0xFFFFCC00) // Amarillo Advertencia
-                    LogLevel.CRITICAL -> Color(0xFFFF3333) // Rojo Alerta
-                    LogLevel.EXEC -> Color(0xFF00E5FF) // Cyan Transporte/Ejecución
+                    LogLevel.INFO -> Color(0xFF00FF66)
+                    LogLevel.WARN -> Color(0xFFFFCC00)
+                    LogLevel.CRITICAL -> Color(0xFFFF3333)
+                    LogLevel.EXEC -> Color(0xFF00E5FF)
                 }
 
-                // Formateador de tiempo estilo terminal
                 val timeFormatted = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(log.timestamp))
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    crossAxisAlignment = Alignment.Top
+                    verticalAlignment = Alignment.Top // FIX: En Compose es verticalAlignment, no crossAxisAlignment
                 ) {
                     Text(
                         text = "[$timeFormatted]",
