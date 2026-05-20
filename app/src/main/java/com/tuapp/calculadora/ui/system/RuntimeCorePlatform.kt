@@ -1,119 +1,73 @@
 package com.tuapp.calculadora.ui.system
 
-import androidx.compose.runtime.Composable
+import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
+import com.tuapp.calculadora.ui.system.hal.RuntimeIntelligenceEngine
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 // ==========================================================================
-// 1. RUNTIME EVENT ECOSYSTEM (Type-Safe, Ultra-Low-Latency Event Bus)
+// 1. RUNTIME EVENT BUS (Manejo de flujos de baja latencia)
 // ==========================================================================
 sealed class RuntimeEvent {
-    // FIX: Ruta calificada explícita para evadir el shadowing de nuestra propia data class "System"
-    val timestamp: Long = java.lang.System.currentTimeMillis()
-
-    data class System(val msg: String, val level: LogLevel) : RuntimeEvent()
-    data class Security(val tag: String, val event: String, val integrityAlert: Boolean) : RuntimeEvent()
-    data class Transport(val protocol: String, val target: String, val status: String) : RuntimeEvent()
-    data class Hardware(val subsystem: String, val alert: String, val loadFactor: Float) : RuntimeEvent()
-    data class Execution(val taskName: String, val durationMs: Long, val success: Boolean) : RuntimeEvent()
+    val timestamp: Long = System.currentTimeMillis()
+    data class Log(val tag: String, val msg: String) : RuntimeEvent()
+    data class SecurityAlert(val code: String, val description: String) : RuntimeEvent()
 }
 
-object RuntimeEventBus {
-    private val _events = MutableSharedFlow<RuntimeEvent>(extraBufferCapacity = 64)
+object OmniEventBus {
+    private val _events = MutableSharedFlow<RuntimeEvent>(extraBufferCapacity = 128)
     val events: SharedFlow<RuntimeEvent> = _events.asSharedFlow()
 
-    fun emit(event: RuntimeEvent) {
+    fun dispatch(event: RuntimeEvent) {
         _events.tryEmit(event)
-        
-        // Traducir de forma automática al subsistema clásico de logs para mantener consistencia visual
-        when (event) {
-            is RuntimeEvent.System -> RuntimeTelemetryManager.log("SYS", event.msg, event.level)
-            is RuntimeEvent.Security -> RuntimeTelemetryManager.log("SEC", "[${event.tag}] ${event.event}", if (event.integrityAlert) LogLevel.CRITICAL else LogLevel.WARN)
-            is RuntimeEvent.Transport -> RuntimeTelemetryManager.log("TRN", "${event.protocol} -> ${event.target}: ${event.status}", LogLevel.EXEC)
-            is RuntimeEvent.Hardware -> RuntimeTelemetryManager.log("HWD", "${event.subsystem.uppercase()}: ${event.alert}", LogLevel.WARN)
-            is RuntimeEvent.Execution -> RuntimeTelemetryManager.log("EXE", "Task '${event.taskName}' completed in ${event.durationMs}ms", if (event.success) LogLevel.INFO else LogLevel.CRITICAL)
-        }
+        RuntimeIntelligenceEngine.reportEventThroughput(1)
     }
 }
 
 // ==========================================================================
-// 2. RUNTIME SESSION SYSTEM (Control de Estado de la Plataforma)
+// 2. OPERATIONAL SESSION ENGINE
+// Sistema operativo de sesiones real con observabilidad absoluta.
 // ==========================================================================
-data class OperationalSession(
+enum class SessionStatus { INITIATING, NOMINAL, DEGRADED, TERMINATED }
+
+data class TacticalSession(
     val sessionId: String,
-    val startTime: Long,
-    val durationMs: Long,
-    val totalOperations: Int,
-    val operationalState: SessionState,
-    val activeTransport: String
-)
-
-enum class SessionState { INITIALIZING, ACTIVE, INTERRUPTED, SECURE_LOCK }
-
-object RuntimeSessionManager {
-    private var currentSession: OperationalSession? = null
-    private var operationCount = 0
-
-    fun startSession(transport: String = "STANDALONE") {
-        operationCount = 0
-        currentSession = OperationalSession(
-            sessionId = "OP-${java.lang.System.currentTimeMillis() % 10000}",
-            startTime = java.lang.System.currentTimeMillis(),
-            durationMs = 0L,
-            totalOperations = 0,
-            operationalState = SessionState.ACTIVE,
-            activeTransport = transport
-        )
-        RuntimeEventBus.emit(RuntimeEvent.System("New operational session standard created: ${currentSession?.sessionId}", LogLevel.INFO))
-    }
-
-    fun registerActivity() {
-        operationCount++
-        RuntimeTelemetryManager.registerExecution()
-    }
-
-    fun getSessionMetrics(): OperationalSession {
-        val session = currentSession ?: return OperationalSession("NULL", 0L, 0L, 0, SessionState.INITIALIZING, "NONE")
-        return session.copy(
-            durationMs = java.lang.System.currentTimeMillis() - session.startTime,
-            totalOperations = operationCount
-        )
-    }
+    val bootTimestamp: Long,
+    val activeTransport: String,
+    var status: SessionStatus,
+    var peakMemoryUsageMb: Long,
+    var criticalAnomalies: Int,
+    var operationsExecuted: Long
+) {
+    val uptimeMs: Long get() = System.currentTimeMillis() - bootTimestamp
 }
 
-// ==========================================================================
-// 3. PLUGIN INFRASTRUCTURE CONTRACT & LAYOUT DEFINITIONS
-// ==========================================================================
-enum class ModuleSize { SMALL, WIDE }
+object SessionOrchestrator {
+    private var activeSession: TacticalSession? = null
 
-data class PluginMetadata(
-    val id: String,
-    val name: String,
-    val version: String,
-    val priority: Int // Determina el ordenamiento automático dentro del Staggered Grid
-)
+    fun bootstrapSession(transport: String = "CORE_MESH") {
+        activeSession = TacticalSession(
+            sessionId = "OP-SYS-${System.currentTimeMillis() % 10000}",
+            bootTimestamp = System.currentTimeMillis(),
+            activeTransport = transport,
+            status = SessionStatus.INITIATING,
+            peakMemoryUsageMb = 0L,
+            criticalAnomalies = 0,
+            operationsExecuted = 0L
+        )
+        OmniEventBus.dispatch(RuntimeEvent.Log("BOOT", "Session ${activeSession?.sessionId} initialized over $transport"))
+        activeSession?.status = SessionStatus.NOMINAL
+    }
 
-interface RuntimePlugin {
-    val metadata: PluginMetadata
-    
-    // Lifecycle Hooks (Para inicializar controladores, sockets o listeners de hardware)
-    fun onPluginAttach()
-    fun onPluginDetach()
+    fun tick() {
+        val session = activeSession ?: return
+        val mem = OmniDeviceHAL.fetchMemoryProfile()
+        if (mem.totalMb - mem.availableMb > session.peakMemoryUsageMb) {
+            session.peakMemoryUsageMb = mem.totalMb - mem.availableMb
+        }
+        RuntimeIntelligenceEngine.analyzeSystemCycle(OmniDeviceHAL.fetchThermalProfile(), mem)
+    }
 
-    // UI Provider Rules
-    @Composable
-    fun RenderWidget(size: ModuleSize, systemMetrics: RuntimeMetrics)
+    fun getSessionManifest(): TacticalSession? = activeSession
 }
-
-// ==========================================================================
-// 4. DEVICE & HARDWARE TELEMETRY SCHEMA
-// ==========================================================================
-data class DeviceHardwareState(
-    val batteryLevel: Int,
-    val thermalState: String,
-    val usbConnected: Boolean,
-    val otgDetected: Boolean,
-    val bluetoothEnabled: Boolean,
-    val networkLink: String
-)
