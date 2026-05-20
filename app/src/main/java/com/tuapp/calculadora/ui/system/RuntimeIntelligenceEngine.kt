@@ -4,6 +4,9 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
+// Importamos las clases de datos directamente asumiendo que son top-level en su paquete
+import com.tuapp.calculadora.ui.system.hal.ThermalProfile
+import com.tuapp.calculadora.ui.system.hal.MemoryProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,11 +31,12 @@ object RuntimeIntelligenceEngine {
     private val _stressLevel = MutableStateFlow(SystemStressLevel.NOMINAL)
     val stressLevel: StateFlow<SystemStressLevel> = _stressLevel.asStateFlow()
 
-    private val _adaptiveConfig = MutableStateFlow(LocalAdaptiveConfig.defaultFactory())
+    // FIX 1: Inicializamos el StateFlow con una instancia limpia en lugar de buscar el defaultFactory
+    private val _adaptiveConfig = MutableStateFlow(AdaptiveUIConfig(8.dp, 1.0f, 0.5f, true, 100))
     val adaptiveConfig: StateFlow<AdaptiveUIConfig> = _adaptiveConfig.asStateFlow()
 
-    // Este tick es llamado por el SessionOrchestrator cada segundo
-    fun analyzeSystemCycle(thermal: OmniDeviceHAL.ThermalProfile, memory: OmniDeviceHAL.MemoryProfile) {
+    // FIX 2: Usamos las clases directamente sin el prefijo OmniDeviceHAL.
+    fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
         val newStress = when {
             thermal.isThrottling || memory.pressurePercent > 90 -> SystemStressLevel.CRITICAL
             thermal.cpuTempC > 75 || memory.pressurePercent > 80 -> SystemStressLevel.SEVERE
