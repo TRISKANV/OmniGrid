@@ -1,13 +1,11 @@
 package com.tuapp.calculadora.ui.system
 
-import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-// --- ESTRUCTURA DE DATOS DE RUNTIME ---
 data class TelemetryLog(
     val timestamp: String,
     val tag: String,
@@ -22,53 +20,58 @@ data class RuntimeMetrics(
     val activeCoroutines: Int,
     val queueSize: Int,
     val totalExecutions: Long,
-    val transportState: String
+    val transportState: String,
+    val hardwareState: DeviceHardwareState,
+    val activeSessionId: String,
+    val sessionDurationFormatted: String
 )
 
-// --- OMNI RUNTIME EVENT BUS ---
 object RuntimeTelemetryManager {
     
-    private const val MAX_LOG_BUFFER = 50
+    private const val MAX_LOG_BUFFER = 60
 
-    // Búfer circular de logs persistente en memoria para evitar pérdida de eventos con UI cerrada
     private val _logHistory = MutableStateFlow<List<TelemetryLog>>(emptyList())
     val logHistory: StateFlow<List<TelemetryLog>> = _logHistory.asStateFlow()
 
-    // Métricas globales del sistema
+    // Estado inicial acoplado con variables simuladas del entorno real de hardware
     private val _metrics = MutableStateFlow(
         RuntimeMetrics(
             memoryUsageMb = 0.0,
             activeCoroutines = 0,
             queueSize = 0,
             totalExecutions = 0L,
-            transportState = "STANDBY"
+            transportState = "CORE_NOMINAL",
+            hardwareState = DeviceHardwareState(
+                batteryLevel = 100,
+                thermalState = "NOMINAL",
+                usbConnected = false,
+                otgDetected = false,
+                bluetoothEnabled = true,
+                networkLink = "ENCRYPTED_MESH"
+            ),
+            activeSessionId = "OFFLINE",
+            sessionDurationFormatted = "00:00"
         )
     )
     val metrics: StateFlow<RuntimeMetrics> = _metrics.asStateFlow()
 
-    // Contadores atómicos internos de alta concurrencia
     private val activeCoroutinesCount = AtomicInteger(0)
     private val currentQueueSize = AtomicInteger(0)
     private val executionCounter = AtomicLong(0L)
-    private var currentTransportState = "STANDBY"
+    private var currentTransportState = "CORE_NOMINAL"
 
     init {
-        // Inicializar con huella de arranque limpia
-        log("CORE", "OmniGrid Engine initialization sequence complete.", LogLevel.INFO)
-        updateSystemMemory()
+        log("CORE", "OmniGrid Platform Stack fully operational.", LogLevel.INFO)
+        updateSystemStateDirect()
     }
 
-    // API pública de logging para CryptoManager, BluetoothHidExecutor, etc.
     fun log(tag: String, message: String, level: LogLevel = LogLevel.INFO) {
         val currentLogs = _logHistory.value
         val timestamp = formatCurrentTime()
         val newLog = TelemetryLog(timestamp, tag, message, level)
-        
-        // Mantener tamaño de buffer controlado para evitar memory leaks
         _logHistory.value = (currentLogs + newLog).takeLast(MAX_LOG_BUFFER)
     }
 
-    // --- INTERFACES DE CONTROL DE TELEMETRÍA ---
     fun incrementCoroutines() {
         activeCoroutinesCount.incrementAndGet()
         pushMetrics()
@@ -94,21 +97,30 @@ object RuntimeTelemetryManager {
         pushMetrics()
     }
 
-    /**
-     * Sincroniza las métricas del sistema leyendo el entorno nativo de la máquina virtual.
-     * Debe llamarse periódicamente desde el bucle del Dashboard o ForegroundService.
-     */
-    fun updateSystemMemory() {
+    fun updateSystemStateDirect() {
         val runtime = Runtime.getRuntime()
         val usedMemoryBytes = runtime.totalMemory() - runtime.freeMemory()
         val usedMemoryMb = usedMemoryBytes.toDouble() / (1024.0 * 1024.0)
         
+        val session = RuntimeSessionManager.getSessionMetrics()
+        
+        // Simulación controlada y segura de fluctuación de telemetría de hardware
+        // para alimentar los gráficos reactivos de la UI sin bloquear hilos.
+        val mockBattery = (78..82).random()
+        val formattedDuration = String.format("%02d:%02d", (session.durationMs / 60000) % 60, (session.durationMs / 1000) % 60)
+
         _metrics.value = _metrics.value.copy(
             memoryUsageMb = usedMemoryMb,
             activeCoroutines = activeCoroutinesCount.get(),
             queueSize = currentQueueSize.get(),
             totalExecutions = executionCounter.get(),
-            transportState = currentTransportState
+            transportState = currentTransportState,
+            activeSessionId = session.sessionId,
+            sessionDurationFormatted = formattedDuration,
+            hardwareState = _metrics.value.hardwareState.copy(
+                batteryLevel = mockBattery,
+                thermalState = if (usedMemoryMb > 120) "ELEVATED" else "NOMINAL"
+            )
         )
     }
 
