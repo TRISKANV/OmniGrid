@@ -1,6 +1,5 @@
 package com.tuapp.calculadora.ui.dashboard
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,92 +14,115 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tuapp.calculadora.ui.system.*
+import com.tuapp.calculadora.ui.system.SessionOrchestrator
+import com.tuapp.calculadora.ui.system.hal.RuntimeIntelligenceEngine
+import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.delay
 
-data class DashboardPlugin(
-    val id: String,
-    val title: String,
-    val size: ModuleSize,
-    val content: @Composable (metrics: RuntimeMetrics) -> Unit
-)
+// ==========================================================================
+// MOCK PLUGIN PARA DEMOSTRAR LA NUEVA ARQUITECTURA SDK
+// ==========================================================================
+class CoreTelemetryPlugin : OmniPlugin {
+    override val manifest = PluginManifest(
+        pluginId = "core.telemetry.01",
+        displayName = "CORE TELEMETRY",
+        version = "2.0.0",
+        description = "Provides real-time HAL observability",
+        category = PluginCategory.TELEMETRY,
+        providedCapabilities = setOf(SystemCapability.HARDWARE_TELEMETRY),
+        consumedCapabilities = emptySet(),
+        requiredPermissions = emptyList(),
+        visualPriority = 0,
+        supportsHeadlessExecution = true,
+        transportCompatibility = listOf("LOCAL")
+    )
+
+    override val widgetProvider = object : PluginWidgetProvider {
+        @Composable
+        override fun Render(modifier: Modifier) {
+            Column(modifier = modifier.padding(8.dp)) {
+                Text("HAL DATA STREAM ONLINE", color = Color(0xFF00FF66), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("V 2.0.0 // NOMINAL", color = Color.Gray, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
+        override fun onWidgetVisible() {}
+        override fun onWidgetHidden() {}
+    }
+
+    override fun onInstall() {}
+    override fun onBoot() {}
+    override fun onSuspend() {}
+    override fun onDestroy() {}
+    override fun executeAction(actionId: String, payload: Map<String, Any>) = Result.success(Unit)
+    override fun getHealthStatus() = "NOMINAL"
+}
 
 // ==========================================================================
-// MOTOR DE GESTIÓN Y ORQUESTACIÓN DE LA PLATAFORMA (DASHBOARD)
+// COMPOSITOR DEL ECOSISTEMA (DASHBOARD)
 // ==========================================================================
 @Composable
 fun ModularDashboardScreen() {
-    var diagnosticsOpen by remember { mutableStateOf(false) }
-    val sysMetrics by RuntimeTelemetryManager.metrics.collectAsState()
+    val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
+    
+    // Simulación del gestor de plugins cargando el sistema
+    val loadedPlugins = remember {
+        listOf(CoreTelemetryPlugin()).sortedBy { it.manifest.visualPriority }
+    }
 
-    // Bucle unificado de muestreo y actualización del Core Platform
     LaunchedEffect(Unit) {
-        RuntimeSessionManager.startSession("LOCAL_MESH")
+        SessionOrchestrator.bootstrapSession()
+        loadedPlugins.forEach { it.onBoot() }
+        
         while (true) {
-            RuntimeTelemetryManager.updateSystemStateDirect()
-            delay(1000) // Latido rítmico de telemetría estable (1 Hz)
-        }
-    }
-
-    // Inyección automatizada de Plugins del ecosistema ordenados por prioridad visual
-    val registeredPlugins = remember {
-        listOf(
-            HardwareObserverPlugin(),
-            SessionAnalyticsPlugin(),
-            CoreEventBusPlugin()
-        ).sortedBy { it.metadata.priority }
-    }
-
-    // Lógica estructural de ciclo de vida de conexión para los plugins activos
-    DisposableEffect(registeredPlugins) {
-        registeredPlugins.forEach { it.onPluginAttach() }
-        onDispose {
-            registeredPlugins.forEach { it.onPluginDetach() }
+            SessionOrchestrator.tick()
+            delay(1000) // 1Hz Tick Rate del OS
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(TacticalColors.OledBlack)
+            .background(Color(0xFF050505)) // Tactical OLED Black
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             
-            // --- TOP HUD PLATFORM LAYER ---
+            // --- TOP HUD: INTELLIGENCE & SESSION LAYER ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    .padding(top = 24.dp, start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
                     Text(
-                        text = "OMNI_PLATFORM // R1",
-                        color = TacticalColors.TextPrimary,
-                        fontSize = 18.sp,
+                        text = "OMNI_OS // V2.0",
+                        color = Color.White,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.5).sp
                     )
+                    val session = SessionOrchestrator.getSessionManifest()
                     Text(
-                        text = "SESSION: ${sysMetrics.activeSessionId} [${sysMetrics.sessionDurationFormatted}]",
+                        text = "SESSION: ${session?.sessionId ?: "BOOTING"} | ${session?.status?.name ?: "N/A"}",
                         color = Color(0xFF00E5FF),
-                        fontSize = 9.sp,
+                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
+                // AI Indicator
                 Box(
                     modifier = Modifier
-                        .border(1.dp, if(diagnosticsOpen) TacticalColors.SystemWarning else TacticalColors.BorderGlass, RoundedCornerShape(4.dp))
-                        .background(if(diagnosticsOpen) TacticalColors.SystemWarning.copy(alpha = 0.1f) else Color.Transparent)
-                        .tacticalClick { diagnosticsOpen = !diagnosticsOpen }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .border(1.dp, if(anomalies.isEmpty()) Color(0xFF00FF66) else Color(0xFFFF3333), RoundedCornerShape(4.dp))
+                        .background(if(anomalies.isEmpty()) Color(0xFF00FF66).copy(alpha = 0.1f) else Color(0xFFFF3333).copy(alpha = 0.1f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if(diagnosticsOpen) "HUD_ACTIVE" else "DIAGNOSTICS //",
-                        color = if(diagnosticsOpen) TacticalColors.SystemWarning else TacticalColors.TextSecondary,
+                        text = if(anomalies.isEmpty()) "AI: NOMINAL" else "AI: ANOMALY",
+                        color = if(anomalies.isEmpty()) Color(0xFF00FF66) else Color(0xFFFF3333),
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
@@ -108,124 +130,47 @@ fun ModularDashboardScreen() {
                 }
             }
 
-            // --- GRID DE COMPOSICIÓN ADAPTATIVA DE PLUGINS ---
+            // --- GRID DE PLUGINS DINÁMICO ---
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalItemSpacing = 12.dp,
-                modifier = Modifier.fillMaxSize().weight(1f)
+                modifier = Modifier.fillMaxSize()
             ) {
-                items(registeredPlugins, key = { it.metadata.id }) { plugin ->
-                    // Forzar tamaño WIDE para el primer plugin de prioridad alta o según su diseño interno
-                    val determinedSize = if (plugin.metadata.priority == 0) ModuleSize.WIDE else ModuleSize.SMALL
-                    
-                    PluginFrame(plugin = plugin, size = determinedSize, metrics = sysMetrics)
+                items(loadedPlugins, key = { it.manifest.pluginId }) { plugin ->
+                    PluginContainer(plugin = plugin)
                 }
             }
         }
-
-        ScanlineOverlay(modifier = Modifier.fillMaxSize())
-
-        TacticalDiagnosticsDrawer(
-            visible = diagnosticsOpen,
-            onClose = { diagnosticsOpen = false },
-            modifier = Modifier.align(Alignment.CenterEnd)
-        )
     }
 }
 
 @Composable
-fun PluginFrame(plugin: RuntimePlugin, size: ModuleSize, metrics: RuntimeMetrics) {
-    val modifier = if (size == ModuleSize.WIDE) Modifier.fillMaxWidth() else Modifier.aspectRatio(1f)
+fun PluginContainer(plugin: OmniPlugin) {
+    val isWide = plugin.manifest.visualPriority == 0
+    val modifier = if (isWide) Modifier.fillMaxWidth() else Modifier.aspectRatio(1f)
 
     Box(
         modifier = modifier
-            .tacticalGlass(cornerRadius = 12f)
+            .background(Color(0xFF111111), RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFF222222), RoundedCornerShape(12.dp))
             .padding(14.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = plugin.metadata.name,
-                    color = TacticalColors.TextSecondary,
+                    text = plugin.manifest.displayName,
+                    color = Color.Gray,
                     fontSize = 10.sp,
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                BreathingIndicator()
             }
-            
             Spacer(modifier = Modifier.height(12.dp))
-            plugin.RenderWidget(size = size, systemMetrics = metrics)
-        }
-    }
-}
-
-// ==========================================================================
-// IMPLEMENTACIONES DE PLUGINS REALES (CONTRATOS EJECUTADOS)
-// ==========================================================================
-
-class HardwareObserverPlugin : RuntimePlugin {
-    override val metadata = PluginMetadata("hwd_monitor", "DEVICE_HARDWARE_LAYER", "1.0.0", 0)
-
-    override fun onPluginAttach() {
-        RuntimeEventBus.emit(RuntimeEvent.System("Hardware Observer Plugin mounted into active dashboard slots.", LogLevel.INFO))
-    }
-
-    override fun onPluginDetach() {}
-
-    @Composable
-    override fun RenderWidget(size: ModuleSize, systemMetrics: RuntimeMetrics) {
-        val hw = systemMetrics.hardwareState
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text("BATTERY_CORE", color = TacticalColors.TextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-                Text("${hw.batteryLevel}%", color = TacticalColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("THERMAL: ${hw.thermalState}", color = if (hw.thermalState == "NOMINAL") Color(0xFF00FF66) else TacticalColors.SystemWarning, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("NETWORK_LINK", color = TacticalColors.TextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-                Text(hw.networkLink, color = Color(0xFF00E5FF), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text("USB_OTG: ${if(hw.otgDetected) "READY" else "DISCONNECTED"}", color = TacticalColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-            }
-        }
-    }
-}
-
-class SessionAnalyticsPlugin : RuntimePlugin {
-    override val metadata = PluginMetadata("session_analytics", "PLATFORM_THROUGHPUT", "1.0.0", 1)
-
-    override fun onPluginAttach() {}
-    override fun onPluginDetach() {}
-
-    @Composable
-    override fun RenderWidget(size: ModuleSize, systemMetrics: RuntimeMetrics) {
-        Column {
-            Text("${systemMetrics.totalExecutions} OPS", color = TacticalColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Engine Pipeline Ops", color = TacticalColors.TextSecondary, fontSize = 10.sp)
-        }
-    }
-}
-
-class CoreEventBusPlugin : RuntimePlugin {
-    override val metadata = PluginMetadata("event_bus_monitor", "BUS_TELEMETRY", "1.0.0", 2)
-
-    override fun onPluginAttach() {}
-    override fun onPluginDetach() {}
-
-    @Composable
-    override fun RenderWidget(size: ModuleSize, systemMetrics: RuntimeMetrics) {
-        Column {
-            Text("QUEUE STATUS", color = TacticalColors.TextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-            Text("${systemMetrics.queueSize} BUF", color = TacticalColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Spacer(modifier = Modifier.height(4.dp))
-            TinyWaveform()
+            
+            // Renderizado agnóstico del widget del plugin
+            plugin.widgetProvider?.Render(modifier = Modifier.fillMaxSize())
         }
     }
 }
