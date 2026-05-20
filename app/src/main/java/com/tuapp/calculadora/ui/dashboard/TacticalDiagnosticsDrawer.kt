@@ -1,193 +1,163 @@
 package com.tuapp.calculadora.ui.dashboard
 
-import android.os.Build
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.*
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
+import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun TacticalDiagnosticsDrawer(
-    visible: Boolean,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Recolectar la historia de logs y métricas del bus global en tiempo real
-    val logList by RuntimeTelemetryManager.logHistory.collectAsState()
-    val sysMetrics by RuntimeTelemetryManager.metrics.collectAsState()
+fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
+    // 1. Conexión reactiva a la nueva plataforma (Reemplaza a los viejos logHistory y metrics)
+    val logs by RuntimeTelemetryManager.logs.collectAsState()
+    val session = SessionOrchestrator.getSessionManifest()
+    val thermal = OmniDeviceHAL.fetchThermalProfile()
+    val memory = OmniDeviceHAL.fetchMemoryProfile()
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInHorizontally(
-            initialOffsetX = { it }, 
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = 0.85f)
-        ) + fadeIn(),
-        exit = slideOutHorizontally(
-            targetOffsetX = { it }, 
-            animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = 0.9f)
-        ) + fadeOut(),
-        modifier = modifier.fillMaxHeight().fillMaxWidth(0.85f)
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF0A0A0A)) // Fondo ultra oscuro
+            .border(1.dp, Color(0xFF222222))
+            .padding(16.dp)
     ) {
-        Box(
+        // --- CABECERA DE DIAGNÓSTICO ---
+        Text(
+            text = "SYSTEM DIAGNOSTICS",
+            color = Color(0xFF00FF66),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 2.sp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // --- MÉTRICAS EN TIEMPO REAL (El reemplazo de la variable "metrics") ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            MetricBlock(label = "SESSION UPTIME", value = "${session?.uptimeMs ?: 0}ms")
+            MetricBlock(label = "ACTIVE TRANS", value = session?.activeTransport ?: "NONE")
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            MetricBlock(label = "CORE TEMP", value = "${thermal.cpuTempC}°C", alert = thermal.isThrottling)
+            MetricBlock(label = "MEM PRESSURE", value = "${memory.pressurePercent}%", alert = memory.pressurePercent > 80)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Divider(color = Color(0xFF222222), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "EVENT STREAM BUFFER",
+            color = Color.Gray,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- RENDERIZADO DE LOGS (Arreglo del "when" exhaustivo y propiedades faltantes) ---
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        renderEffect = RenderEffect.createBlurEffect(
-                            25f, 25f, Shader.TileMode.CLAMP
-                        ).asComposeRenderEffect()
-                    }
-                }
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color(0xCC050505), Color(0xF20A0B0C))
-                    )
-                )
-                .border(1.dp, TacticalColors.BorderGlass, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
-                .padding(16.dp)
+                .background(Color(0xFF111111), RoundedCornerShape(8.dp))
+                .border(1.dp, Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
+                .padding(8.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                
-                // --- HEADER ---
+            items(logs) { log ->
+                // Solución al error: El when ahora tiene cobertura absoluta sobre el enum LogLevel
+                val color = when (log.level) {
+                    LogLevel.INFO -> Color(0xFF00FF66) // Verde Hacker
+                    LogLevel.WARN -> Color(0xFFFFCC00) // Amarillo Advertencia
+                    LogLevel.CRITICAL -> Color(0xFFFF3333) // Rojo Alerta
+                    LogLevel.EXEC -> Color(0xFF00E5FF) // Cyan Transporte/Ejecución
+                }
+
+                // Formateador de tiempo estilo terminal
+                val timeFormatted = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(log.timestamp))
+
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "TACTICAL RUNTIME HUD",
-                            color = TacticalColors.TextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "OBSERVER_LAYER // SYSTEM_CONNECTED",
-                            color = TacticalColors.TextSecondary,
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                    
-                    Box(
-                        modifier = Modifier
-                            .border(1.dp, TacticalColors.BorderGlass, RoundedCornerShape(4.dp))
-                            .background(Color(0x1AFFFFFF))
-                            .tacticalClick { onClose() }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("CLOSE //", color = TacticalColors.TextPrimary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // --- SECCIÓN 1: METRICAS REALES DESACOPLADAS ---
-                Text("LIVE TELEMETRY", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "ACTIVE_COROUTINES", unit = "JOBS") {
-                        Text("${sysMetrics.activeCoroutines} active", color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "JVM_MEM_USAGE", unit = "MB") {
-                        Text(String.format("%.2f MB", sysMetrics.memoryUsageMb), color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "QUEUE_LOAD", unit = "BUF") {
-                        Text("${sysMetrics.queueSize} / 128", color = TacticalColors.TextSecondary, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "ENGINE_RUN_THROUGHPUT", unit = "OPS") {
-                        Text("${sysMetrics.totalExecutions} total", color = Color(0xFF00E5FF), fontSize = 15.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // --- SECCIÓN 2: PIPELINE DE EVENTOS CENTRALIZADO ---
-                Text("REALTIME EVENT STREAM", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .background(Color(0xFF030303))
-                        .border(1.dp, TacticalColors.BorderGlass, RoundedCornerShape(6.dp))
-                        .padding(10.dp)
+                        .padding(vertical = 4.dp),
+                    crossAxisAlignment = Alignment.Top
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        reverseLayout = true
-                    ) {
-                        items(logList.reversed()) { log ->
-                            val colorLevel = when (log.level) {
-                                LogLevel.WARN -> TacticalColors.SystemWarning
-                                LogLevel.CRITICAL -> Color.Red
-                                LogLevel.EXEC -> Color(0xFF00E5FF)
-                                LogLevel.INFO -> TacticalColors.TextSecondary
-                            }
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Text("[${log.timestamp}] ", color = TacticalColors.TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                Text("${log.tag}: ", color = colorLevel, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                                Text(log.message, color = TacticalColors.TextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-                    }
+                    Text(
+                        text = "[$timeFormatted]",
+                        color = Color.DarkGray,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.width(75.dp)
+                    )
+                    Text(
+                        text = "[${log.tag}]",
+                        color = color.copy(alpha = 0.8f),
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.width(45.dp)
+                    )
+                    Text(
+                        text = log.message,
+                        color = color,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
     }
 }
 
+// Sub-componente táctico para mostrar las métricas en recuadros
 @Composable
-private fun IsolatedTelemetryWidget(
-    modifier: Modifier = Modifier,
-    title: String,
-    unit: String,
-    content: @Composable () -> Unit
-) {
+private fun MetricBlock(label: String, value: String, alert: Boolean = false) {
+    val accentColor = if (alert) Color(0xFFFF3333) else Color(0xFF00E5FF)
     Column(
-        modifier = modifier
-            .background(Color(0x33000000))
-            .border(1.dp, TacticalColors.BorderGlass, RoundedCornerShape(8.dp))
-            .padding(12.dp)
+        modifier = Modifier
+            .background(Color(0xFF111111), RoundedCornerShape(4.dp))
+            .border(1.dp, if (alert) accentColor else Color.Transparent, RoundedCornerShape(4.dp))
+            .padding(8.dp)
+            .width(130.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(title, color = TacticalColors.TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            Text(unit, color = TacticalColors.TextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        content()
+        Text(
+            text = label,
+            color = Color.Gray,
+            fontSize = 8.sp,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            color = accentColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
     }
 }
