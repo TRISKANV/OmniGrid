@@ -18,7 +18,12 @@ import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
 import kotlinx.coroutines.delay
 
-enum class ModuleSize { SMALL, WIDE }
+data class DashboardPlugin(
+    val id: String,
+    val title: String,
+    val size: ModuleSize,
+    val content: @Composable (metrics: RuntimeMetrics) -> Unit
+)
 
 // ==========================================================================
 // MOTOR DE GESTIÓN Y ORQUESTACIÓN DE LA PLATAFORMA (DASHBOARD)
