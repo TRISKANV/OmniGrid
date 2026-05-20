@@ -3,7 +3,6 @@ package com.tuapp.calculadora.ui.system
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -12,15 +11,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 // ==========================================================================
-// 1. INTERACCIÓN TÁCTIL PREMIUM (Solución al error de compilación)
+// 1. INTERACCIÓN TÁCTIL PREMIUM
 // ==========================================================================
 fun Modifier.tacticalClick(
     enabled: Boolean = true,
@@ -50,31 +47,7 @@ fun Modifier.tacticalClick(
 }
 
 // ==========================================================================
-// 2. SISTEMA DE CAPAS GLASS (Profundidad táctica modular)
-// ==========================================================================
-fun Modifier.tacticalGlass(cornerRadius: Float = 12f): Modifier = this
-    .clip(RoundedCornerShape(cornerRadius.dp))
-    .background(
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0x1AFFFFFF), // Control de opacidad translúcido superior
-                Color(0x06FFFFFF)  // Caída de tono profunda
-            )
-        )
-    )
-    .border(
-        width = 1.dp,
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                TacticalColors.BorderGlass,
-                TacticalColors.BorderGlass.copy(alpha = 0.2f)
-            )
-        ),
-        shape = RoundedCornerShape(cornerRadius.dp)
-    )
-
-// ==========================================================================
-// 3. CAPA DE ESCANEO AMBIENTAL (Scanlines de monitor CRT de fondo)
+// 2. CAPA DE ESCANEO AMBIENTAL (Scanlines de monitor CRT de fondo)
 // ==========================================================================
 @Composable
 fun ScanlineOverlay(modifier: Modifier = Modifier) {
@@ -97,7 +70,7 @@ fun ScanlineOverlay(modifier: Modifier = Modifier) {
 }
 
 // ==========================================================================
-// 4. BREATHING INDICATOR (Pulso de estado nominal)
+// 3. BREATHING INDICATOR (Pulso de estado nominal)
 // ==========================================================================
 @Composable
 fun BreathingIndicator(modifier: Modifier = Modifier) {
@@ -121,7 +94,7 @@ fun BreathingIndicator(modifier: Modifier = Modifier) {
 }
 
 // ==========================================================================
-// 5. TINY WAVEFORM (Micro-animación de telemetría de hilos)
+// 4. TINY WAVEFORM (Micro-animación de telemetría de hilos)
 // ==========================================================================
 @Composable
 fun TinyWaveform(modifier: Modifier = Modifier) {
