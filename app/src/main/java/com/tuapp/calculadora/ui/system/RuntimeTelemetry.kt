@@ -1,143 +1,127 @@
 package com.tuapp.calculadora.ui.system
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.flow.update
 
-data class TelemetryLog(
-    val timestamp: String,
+// NOTA: Se eliminó la re-declaración de "enum class LogLevel" porque ya existe
+// y se exporta desde RuntimeCorePlatform.kt
+
+data class LogEntry(
+    val timestamp: Long,
     val tag: String,
     val message: String,
-    val level: LogLevel = LogLevel.INFO
+    val level: LogLevel
 )
 
-enum class LogLevel { INFO, WARN, CRITICAL, EXEC }
-
-data class RuntimeMetrics(
-    val memoryUsageMb: Double,
-    val activeCoroutines: Int,
-    val queueSize: Int,
-    val totalExecutions: Long,
-    val transportState: String,
-    val hardwareState: DeviceHardwareState,
-    val activeSessionId: String,
-    val sessionDurationFormatted: String
-)
-
+// ==========================================================================
+// 1. EL MOTOR DE TELEMETRÍA (Adaptado a OmniEventBus)
+// ==========================================================================
 object RuntimeTelemetryManager {
-    
-    private const val MAX_LOG_BUFFER = 60
+    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
 
-    private val _logHistory = MutableStateFlow<List<TelemetryLog>>(emptyList())
-    val logHistory: StateFlow<List<TelemetryLog>> = _logHistory.asStateFlow()
-
-    // Estado inicial acoplado con variables simuladas del entorno real de hardware
-    private val _metrics = MutableStateFlow(
-        RuntimeMetrics(
-            memoryUsageMb = 0.0,
-            activeCoroutines = 0,
-            queueSize = 0,
-            totalExecutions = 0L,
-            transportState = "CORE_NOMINAL",
-            hardwareState = DeviceHardwareState(
-                batteryLevel = 100,
-                thermalState = "NOMINAL",
-                usbConnected = false,
-                otgDetected = false,
-                bluetoothEnabled = true,
-                networkLink = "ENCRYPTED_MESH"
-            ),
-            activeSessionId = "OFFLINE",
-            sessionDurationFormatted = "00:00"
-        )
-    )
-    val metrics: StateFlow<RuntimeMetrics> = _metrics.asStateFlow()
-
-    private val activeCoroutinesCount = AtomicInteger(0)
-    private val currentQueueSize = AtomicInteger(0)
-    private val executionCounter = AtomicLong(0L)
-    private var currentTransportState = "CORE_NOMINAL"
-
-    init {
-        log("CORE", "OmniGrid Platform Stack fully operational.", LogLevel.INFO)
-        updateSystemStateDirect()
-    }
+    private var executionCount = 0
 
     fun log(tag: String, message: String, level: LogLevel = LogLevel.INFO) {
-        val currentLogs = _logHistory.value
-        val timestamp = formatCurrentTime()
-        val newLog = TelemetryLog(timestamp, tag, message, level)
-        _logHistory.value = (currentLogs + newLog).takeLast(MAX_LOG_BUFFER)
-    }
-
-    fun incrementCoroutines() {
-        activeCoroutinesCount.incrementAndGet()
-        pushMetrics()
-    }
-
-    fun decrementCoroutines() {
-        if (activeCoroutinesCount.get() > 0) activeCoroutinesCount.decrementAndGet()
-        pushMetrics()
-    }
-
-    fun setQueueSize(size: Int) {
-        currentQueueSize.set(size)
-        pushMetrics()
+        val entry = LogEntry(java.lang.System.currentTimeMillis(), tag, message, level)
+        _logs.update { currentList ->
+            val newList = currentList.toMutableList()
+            newList.add(0, entry)
+            // Limitamos a 50 eventos en memoria para evitar el Memory Pressure
+            if (newList.size > 50) newList.take(50) else newList
+        }
     }
 
     fun registerExecution() {
-        executionCounter.incrementAndGet()
-        pushMetrics()
+        executionCount++
+    }
+}
+
+// ==========================================================================
+// 2. EL PLUGIN OFICIAL DE TELEMETRÍA DEL OMNI OS
+// Transforma el viejo sistema estático en un plugin inyectable.
+// ==========================================================================
+class TelemetryCorePlugin : OmniPlugin {
+    override val manifest = PluginManifest(
+        pluginId = "sys.telemetry.01",
+        displayName = "SYSTEM TELEMETRY",
+        version = "2.1.0",
+        description = "Provides real-time event logging and execution metrics.",
+        category = PluginCategory.DIAGNOSTICS,
+        providedCapabilities = setOf(SystemCapability.NETWORK_OBSERVABILITY),
+        consumedCapabilities = emptySet(),
+        requiredPermissions = emptyList(),
+        visualPriority = 10, // Menos prioridad que el HAL, va abajo
+        supportsHeadlessExecution = true,
+        transportCompatibility = listOf("LOCAL", "EXTERNAL_BUS")
+    )
+
+    override val widgetProvider = object : PluginWidgetProvider {
+        @Composable
+        override fun Render(modifier: Modifier) {
+            val logs by RuntimeTelemetryManager.logs.collectAsState()
+
+            Column(modifier = modifier.fillMaxSize()) {
+                if (logs.isEmpty()) {
+                    Text(
+                        text = "BUFFER EMPTY",
+                        color = Color.DarkGray,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                } else {
+                    logs.take(3).forEach { log ->
+                        val color = when (log.level) {
+                            LogLevel.CRITICAL -> Color(0xFFFF3333)
+                            LogLevel.WARN -> Color(0xFFFFCC00)
+                            LogLevel.EXEC -> Color(0xFF00E5FF)
+                            else -> Color.Gray
+                        }
+                        Text(
+                            text = "[${log.tag}] ${log.message}",
+                            color = color,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                }
+            }
+        }
+
+        override fun onWidgetVisible() {}
+        override fun onWidgetHidden() {}
     }
 
-    fun setTransportState(state: String) {
-        currentTransportState = state
-        pushMetrics()
+    override fun onInstall() {
+        RuntimeTelemetryManager.log("SYS", "Telemetry Plugin Installed", LogLevel.INFO)
     }
 
-    fun updateSystemStateDirect() {
-        val runtime = Runtime.getRuntime()
-        val usedMemoryBytes = runtime.totalMemory() - runtime.freeMemory()
-        val usedMemoryMb = usedMemoryBytes.toDouble() / (1024.0 * 1024.0)
-        
-        val session = RuntimeSessionManager.getSessionMetrics()
-        
-        // Simulación controlada y segura de fluctuación de telemetría de hardware
-        // para alimentar los gráficos reactivos de la UI sin bloquear hilos.
-        val mockBattery = (78..82).random()
-        val formattedDuration = String.format("%02d:%02d", (session.durationMs / 60000) % 60, (session.durationMs / 1000) % 60)
-
-        _metrics.value = _metrics.value.copy(
-            memoryUsageMb = usedMemoryMb,
-            activeCoroutines = activeCoroutinesCount.get(),
-            queueSize = currentQueueSize.get(),
-            totalExecutions = executionCounter.get(),
-            transportState = currentTransportState,
-            activeSessionId = session.sessionId,
-            sessionDurationFormatted = formattedDuration,
-            hardwareState = _metrics.value.hardwareState.copy(
-                batteryLevel = mockBattery,
-                thermalState = if (usedMemoryMb > 120) "ELEVATED" else "NOMINAL"
-            )
-        )
+    override fun onBoot() {
+        RuntimeTelemetryManager.log("SYS", "Telemetry Boot Sequence OK", LogLevel.INFO)
     }
 
-    private fun pushMetrics() {
-        _metrics.value = _metrics.value.copy(
-            activeCoroutines = activeCoroutinesCount.get(),
-            queueSize = currentQueueSize.get(),
-            totalExecutions = executionCounter.get(),
-            transportState = currentTransportState
-        )
+    override fun onSuspend() {}
+    override fun onDestroy() {}
+    
+    override fun executeAction(actionId: String, payload: Map<String, Any>): Result<Any> {
+        return Result.failure(Exception("Action not supported"))
     }
-
-    private fun formatCurrentTime(): String {
-        val millis = System.currentTimeMillis()
-        val seconds = (millis / 1000) % 60
-        val minutes = (millis / (1000 * 60)) % 60
-        val hours = (millis / (1000 * 60 * 60)) % 24
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    }
+    
+    override fun getHealthStatus() = "ACTIVE"
 }
