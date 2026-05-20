@@ -4,9 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.*
+// FIX: KAPT crashea sin el import explícito de items para el Grid
+import androidx.compose.foundation.lazy.staggeredgrid.items 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+// FIX: Import requerido para transformar StateFlow en State Compose
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -14,13 +18,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tuapp.calculadora.ui.system.SessionOrchestrator
+import com.tuapp.calculadora.ui.system.*
 import com.tuapp.calculadora.ui.system.hal.RuntimeIntelligenceEngine
 import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.delay
 
 // ==========================================================================
-// MOCK PLUGIN PARA DEMOSTRAR LA NUEVA ARQUITECTURA SDK
+// MOCK PLUGIN (Ejemplo nativo de la nueva arquitectura OmniPlugin)
 // ==========================================================================
 class CoreTelemetryPlugin : OmniPlugin {
     override val manifest = PluginManifest(
@@ -65,7 +69,6 @@ class CoreTelemetryPlugin : OmniPlugin {
 fun ModularDashboardScreen() {
     val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
     
-    // Simulación del gestor de plugins cargando el sistema
     val loadedPlugins = remember {
         listOf(CoreTelemetryPlugin()).sortedBy { it.manifest.visualPriority }
     }
@@ -83,7 +86,7 @@ fun ModularDashboardScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505)) // Tactical OLED Black
+            .background(Color(0xFF050505))
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             
@@ -113,7 +116,6 @@ fun ModularDashboardScreen() {
                     )
                 }
 
-                // AI Indicator
                 Box(
                     modifier = Modifier
                         .border(1.dp, if(anomalies.isEmpty()) Color(0xFF00FF66) else Color(0xFFFF3333), RoundedCornerShape(4.dp))
@@ -169,7 +171,6 @@ fun PluginContainer(plugin: OmniPlugin) {
             }
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Renderizado agnóstico del widget del plugin
             plugin.widgetProvider?.Render(modifier = Modifier.fillMaxSize())
         }
     }
