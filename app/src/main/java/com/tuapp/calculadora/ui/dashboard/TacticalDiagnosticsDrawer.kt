@@ -29,11 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
-import kotlinx.coroutines.delay
-import kotlin.random.Random
-
-// Structure for Modular Telemetry Logs
-data class RuntimeLog(val timestamp: String, val level: String, val message: String)
 
 @Composable
 fun TacticalDiagnosticsDrawer(
@@ -41,35 +36,9 @@ fun TacticalDiagnosticsDrawer(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Isolated State: Terminal live stream simulation without global recomposition cost
-    var logList by remember { mutableStateOf(listOf<RuntimeLog>()) }
-    
-    LaunchedEffect(visible) {
-        if (visible) {
-            logList = listOf(
-                RuntimeLog("00:00:01", "CORE", "Runtime observer attached successfully."),
-                RuntimeLog("00:00:02", "EXEC", "Coroutine dispatcher initialized on background thread pool."),
-                RuntimeLog("00:00:03", "MEM", "OLED Layout layout boundary cache warmed up.")
-            )
-            while (true) {
-                delay(2500)
-                val targetModule = listOf("NET", "SYS", "DB", "SEC", "QUEUE").random()
-                val targetMsg = listOf(
-                    "Throughput normalized at 48 req/s",
-                    "GC clearance cycle completed in 4ms",
-                    "KeyStore validation structural check passed.",
-                    "Active TCP socket migration executed cleanly.",
-                    "Buffer packet optimization step skipped (nominal)"
-                ).random()
-                
-                val currentSeconds = System.currentTimeMillis() / 1000 % 60
-                val currentMinutes = System.currentTimeMillis() / 1000 / 60 % 60
-                val timeString = String.format("%02d:%02d", currentMinutes, currentSeconds)
-
-                logList = (logList + RuntimeLog(timeString, targetModule, targetMsg)).takeLast(20)
-            }
-        }
-    }
+    // Recolectar la historia de logs y métricas del bus global en tiempo real
+    val logList by RuntimeTelemetryManager.logHistory.collectAsState()
+    val sysMetrics by RuntimeTelemetryManager.metrics.collectAsState()
 
     AnimatedVisibility(
         visible = visible,
@@ -81,13 +50,12 @@ fun TacticalDiagnosticsDrawer(
             targetOffsetX = { it }, 
             animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = 0.9f)
         ) + fadeOut(),
-        modifier = modifier.fillMaxHeight().fillMaxWidth(0.85f) // Ocupa el 85% lateral derecho
+        modifier = modifier.fillMaxHeight().fillMaxWidth(0.85f)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    // Localized Blur: Aplicado solo a la capa del Drawer (Android 12+)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         renderEffect = RenderEffect.createBlurEffect(
                             25f, 25f, Shader.TileMode.CLAMP
@@ -104,7 +72,7 @@ fun TacticalDiagnosticsDrawer(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 
-                // --- HEADER DE OPERACIONES ---
+                // --- HEADER ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -119,14 +87,13 @@ fun TacticalDiagnosticsDrawer(
                             letterSpacing = 1.5.sp
                         )
                         Text(
-                            text = "OBSERVER_LAYER // CORE_ACTIVE",
+                            text = "OBSERVER_LAYER // SYSTEM_CONNECTED",
                             color = TacticalColors.TextSecondary,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
                     
-                    // Botón físico táctil para cerrar el panel
                     Box(
                         modifier = Modifier
                             .border(1.dp, TacticalColors.BorderGlass, RoundedCornerShape(4.dp))
@@ -140,42 +107,34 @@ fun TacticalDiagnosticsDrawer(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // --- SECCIÓN 1: LIVE METRICS SYSTEM (Grid Interno Desacoplado) ---
-                Text("LIVE METRICS", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                // --- SECCIÓN 1: METRICAS REALES DESACOPLADAS ---
+                Text("LIVE TELEMETRY", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "ACTIVE_FLOWS", unit = "THREADS") {
-                        val flowCount = remember { mutableStateOf(4) }
-                        LaunchedEffect(Unit) {
-                            while(true) { delay(1800); flowCount.value = Random.nextInt(3, 7) }
-                        }
-                        Text("${flowCount.value} active", color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "ACTIVE_COROUTINES", unit = "JOBS") {
+                        Text("${sysMetrics.activeCoroutines} active", color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
                     }
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "MEMORY_PRESSURE", unit = "MB") {
-                        val memUsage = remember { mutableStateOf(42.4) }
-                        LaunchedEffect(Unit) {
-                            while(true) { delay(1200); memUsage.value = 40.0 + Random.nextDouble(1.0, 4.5) }
-                        }
-                        Text(String.format("%.1f MB", memUsage.value), color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "JVM_MEM_USAGE", unit = "MB") {
+                        Text(String.format("%.2f MB", sysMetrics.memoryUsageMb), color = TacticalColors.TextPrimary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
                     }
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "QUEUE_SIZE", unit = "BUF") {
-                        Text("0 / 128", color = TacticalColors.TextSecondary, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "QUEUE_LOAD", unit = "BUF") {
+                        Text("${sysMetrics.queueSize} / 128", color = TacticalColors.TextSecondary, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
                     }
-                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "FRAME_STABILITY", unit = "FPS") {
-                        Text("60 FPS", color = Color(0xFF00FF66), fontSize = 15.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    IsolatedTelemetryWidget(modifier = Modifier.weight(1f), title = "ENGINE_RUN_THROUGHPUT", unit = "OPS") {
+                        Text("${sysMetrics.totalExecutions} total", color = Color(0xFF00E5FF), fontSize = 15.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // --- SECCIÓN 2: RUNTIME LOGS TERMINAL (Cinematic Stream) ---
-                Text("OBSERVER EVENT LOGS", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                // --- SECCIÓN 2: PIPELINE DE EVENTOS CENTRALIZADO ---
+                Text("REALTIME EVENT STREAM", color = TacticalColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Box(
@@ -189,12 +148,18 @@ fun TacticalDiagnosticsDrawer(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
-                        reverseLayout = true // Efecto consola donde lo nuevo entra abajo
+                        reverseLayout = true
                     ) {
                         items(logList.reversed()) { log ->
+                            val colorLevel = when (log.level) {
+                                LogLevel.WARN -> TacticalColors.SystemWarning
+                                LogLevel.CRITICAL -> Color.Red
+                                LogLevel.EXEC -> Color(0xFF00E5FF)
+                                LogLevel.INFO -> TacticalColors.TextSecondary
+                            }
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 Text("[${log.timestamp}] ", color = TacticalColors.TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                Text("${log.level}: ", color = TacticalColors.SystemWarning, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                Text("${log.tag}: ", color = colorLevel, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                                 Text(log.message, color = TacticalColors.TextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                             }
                         }
@@ -205,7 +170,6 @@ fun TacticalDiagnosticsDrawer(
     }
 }
 
-// Sub-Componente de telemetría modular desacoplado
 @Composable
 private fun IsolatedTelemetryWidget(
     modifier: Modifier = Modifier,
