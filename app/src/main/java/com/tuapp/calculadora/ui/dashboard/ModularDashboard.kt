@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
 // FIX: Ruta corregida. Se eliminó el ".hal" que causaba el Unresolved Reference
 import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
+import com.tuapp.calculadora.ui.system.plugin.SecureVaultPlugin
 import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.delay
 
@@ -37,7 +38,7 @@ class CoreTelemetryPlugin : OmniPlugin {
         providedCapabilities = setOf(SystemCapability.HARDWARE_TELEMETRY),
         consumedCapabilities = emptySet(),
         requiredPermissions = emptyList(),
-        visualPriority = 0,
+        visualPriority = 1, // Desplazado para dar prioridad visual de ancho completo al Vault
         supportsHeadlessExecution = true,
         transportCompatibility = listOf("LOCAL")
     )
@@ -70,8 +71,15 @@ class CoreTelemetryPlugin : OmniPlugin {
 fun ModularDashboardScreen() {
     val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
     
+    // Inyección de dependencias dinámica mediante instanciación de Plugins Nativos y ordenación por jerarquía visual
     val loadedPlugins = remember {
-        listOf(CoreTelemetryPlugin()).sortedBy { it.manifest.visualPriority }
+        listOf(
+            SecureVaultPlugin().apply { 
+                // Inicializar estado criptográfico simulando un primer desbloqueo de arranque seguro
+                executeAction("ACTION_UNLOCK", emptyMap())
+            },
+            CoreTelemetryPlugin()
+        ).sortedBy { it.manifest.visualPriority }
     }
 
     LaunchedEffect(Unit) {
@@ -151,8 +159,13 @@ fun ModularDashboardScreen() {
 
 @Composable
 fun PluginContainer(plugin: OmniPlugin) {
+    // Si la prioridad es 0, toma las dos columnas completas de la grilla asimétrica (Layout Flagship)
     val isWide = plugin.manifest.visualPriority == 0
-    val modifier = if (isWide) Modifier.fillMaxWidth() else Modifier.aspectRatio(1f)
+    val modifier = if (isWide) {
+        Modifier.fillMaxWidth().staggeredGridItemSpan(StaggeredGridItemSpan.FullLine)
+    } else {
+        Modifier.aspectRatio(1f)
+    }
 
     Box(
         modifier = modifier
@@ -168,6 +181,17 @@ fun PluginContainer(plugin: OmniPlugin) {
                     fontSize = 10.sp,
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.SemiBold
+                )
+                
+                Text(
+                    text = "HEALTH: ${plugin.getHealthStatus()}",
+                    color = when(plugin.getHealthStatus()) {
+                        "NOMINAL" -> Color(0xFF00FF66).copy(alpha = 0.7f)
+                        "DEGRADED" -> Color(0xFFFFB300).copy(alpha = 0.7f)
+                        else -> Color(0xFFFF3333).copy(alpha = 0.7f)
+                    },
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
