@@ -3,7 +3,6 @@ package com.tuapp.calculadora.ui.system
 import com.tuapp.calculadora.ui.system.model.*
 import com.tuapp.calculadora.ui.system.CoreEventBus
 import com.tuapp.calculadora.ui.system.OmniEvent
-import com.tuapp.calculadora.ui.system.SystemStressLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
