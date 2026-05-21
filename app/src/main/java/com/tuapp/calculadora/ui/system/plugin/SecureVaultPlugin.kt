@@ -22,23 +22,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
 
-// ==========================================================================
-// SECURE VAULT DOMAIN & METRICS STATE
-// ==========================================================================
 enum class VaultState { LOCKED, UNLOCKED, DEGRADED_PROCESSING }
 
 data class VaultMetrics(
-    val storageUsedBytes: Long = 149520384L, // ~142.6 MB Iniciales
-    val storageMaxBytes: Long = 1073741824L,  // 1 GB Max Vault Allocation
+    val storageUsedBytes: Long = 149520384L,
+    val storageMaxBytes: Long = 1073741824L,
     val currentThroughputMbs: Double = 0.0,
     val averageLatencyMs: Long = 12,
     val integrityScore: Float = 1.0f,
     val activeSecureSessions: Int = 1
 )
 
-// ==========================================================================
-// OMNIPLUGIN IMPLEMENTATION
-// ==========================================================================
 class SecureVaultPlugin : OmniPlugin {
 
     private val _vaultState = MutableStateFlow(VaultState.LOCKED)
@@ -47,7 +41,7 @@ class SecureVaultPlugin : OmniPlugin {
     private val _metrics = MutableStateFlow(VaultMetrics())
     val metrics: StateFlow<VaultMetrics> = _metrics.asStateFlow()
 
-    private val _adaptiveRefreshRateMs = MutableStateFlow(1000L) // 1Hz por defecto
+    private val _adaptiveRefreshRateMs = MutableStateFlow(1000L)
 
     private var pluginScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -60,7 +54,7 @@ class SecureVaultPlugin : OmniPlugin {
         providedCapabilities = setOf(SystemCapability.SECURE_STORAGE, SystemCapability.CRYPTO_ACCELERATION),
         consumedCapabilities = setOf(SystemCapability.HARDWARE_TELEMETRY),
         requiredPermissions = listOf("android.permission.USE_BIOMETRIC", "android.permission.MANAGE_EXTERNAL_STORAGE"),
-        visualPriority = 0, // Prioridad Máxima (Ancho completo en grilla)
+        visualPriority = 0,
         supportsHeadlessExecution = false,
         transportCompatibility = listOf("LOCAL", "IPC")
     )
@@ -87,8 +81,8 @@ class SecureVaultPlugin : OmniPlugin {
         _vaultState.value = VaultState.LOCKED
         
         pluginScope.launch {
-            RuntimeIntelligenceEngine.anomalies.collect { anomalies ->
-                if (anomalies.isNotEmpty()) {
+            RuntimeIntelligenceEngine.anomalies.collect { list ->
+                if (list.isNotEmpty()) {
                     _adaptiveRefreshRateMs.value = 3000L 
                     if (_vaultState.value == VaultState.UNLOCKED) {
                         _vaultState.value = VaultState.DEGRADED_PROCESSING
@@ -177,9 +171,6 @@ class SecureVaultPlugin : OmniPlugin {
     }
 }
 
-// ==========================================================================
-// TACTICAL PRESENTATION LAYER (HUD WIDGETS)
-// ==========================================================================
 @Composable
 fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
     val state by plugin.vaultState.collectAsState()
@@ -291,7 +282,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            // FIX: Corregido alignment -> horizontalAlignment
             Column(horizontalAlignment = Alignment.End) {
                 Text("HARDWARE_LATENCY", color = Color.Gray, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
                 Text(
