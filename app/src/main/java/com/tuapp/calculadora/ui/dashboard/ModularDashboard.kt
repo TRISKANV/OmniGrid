@@ -19,7 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
-import com.tuapp.calculadora.ui.system.hal.RuntimeIntelligenceEngine
+// FIX: Ruta corregida. Se eliminó el ".hal" que causaba el Unresolved Reference
+import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
 import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.delay
 
