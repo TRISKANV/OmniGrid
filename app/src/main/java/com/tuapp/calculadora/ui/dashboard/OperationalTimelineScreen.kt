@@ -1,6 +1,7 @@
 package com.tuapp.calculadora.ui.dashboard
 
 import androidx.compose.foundation.Canvas
+import com.tuapp.calculadora.ui.system.model.LogLevel 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
