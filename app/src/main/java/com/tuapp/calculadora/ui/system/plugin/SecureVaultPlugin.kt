@@ -275,7 +275,8 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
-                    .background(Color(0------------222222), RoundedCornerShape(2.dp))
+                    // FIX: Error tipográfico de color solucionado aquí
+                    .background(Color(0xFF222222), RoundedCornerShape(2.dp))
             ) {
                 Box(
                     modifier = Modifier
