@@ -59,7 +59,7 @@ object RuntimeIntelligenceEngine {
             ThermalState.WARM -> {
                 needsReduceBlur = true
                 val msg = "Elevación térmica de hardware. Degradando desenfoque superficial."
-                _signals.emit(RuntimeSignal.Warning(msg))
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.LOW))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             ThermalState.THROTTLING -> {
@@ -68,7 +68,7 @@ object RuntimeIntelligenceEngine {
                 targetedTelemetryDelay = 2000L
                 val msg = "Thermal Throttling severo. Modulando ciclos de reloj internos."
                 currentAnomalies.add("THERMAL_THROTTLING")
-                _signals.emit(RuntimeSignal.Warning(msg))
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             ThermalState.CRITICAL -> {
@@ -78,7 +78,7 @@ object RuntimeIntelligenceEngine {
                 needsSimplifyRendering = true
                 val msg = "PELIGRO TÉRMICO EN PROCESADOR. Forzando modo UI minimalista."
                 currentAnomalies.add("CRITICAL_THERMAL_OVERLOAD")
-                _signals.emit(RuntimeSignal.Warning(msg))
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             else -> {}
@@ -89,7 +89,7 @@ object RuntimeIntelligenceEngine {
             MemoryPressure.HIGH -> {
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2000L)
                 val msg = "Baja disponibilidad de RAM del sistema. Retrasando buffers secundarios."
-                _signals.emit(RuntimeSignal.Warning(msg))
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.MEDIUM))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             MemoryPressure.CRITICAL -> {
@@ -97,7 +97,7 @@ object RuntimeIntelligenceEngine {
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 4000L)
                 val msg = "Advertencia severa de memoria (LowMemory OS). OOM Inminente."
                 currentAnomalies.add("LOW_MEMORY_CRITICAL")
-                _signals.emit(RuntimeSignal.Warning(msg))
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             else -> {}
@@ -115,7 +115,7 @@ object RuntimeIntelligenceEngine {
             needsSimplifyRendering = true
             val msg = "Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos."
             currentAnomalies.add("RUNTIME_CONGESTION")
-            _signals.emit(RuntimeSignal.Warning(msg))
+            _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
             CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
         }
 
