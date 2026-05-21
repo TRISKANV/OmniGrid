@@ -6,11 +6,21 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 
-data class MemoryProfile(val availableMB: Long, val totalMB: Long, val pressurePercent: Int, val isLowMemory: Boolean)
-data class ThermalProfile(val cpuTempC: Float, val isThrottling: Boolean, val batteryLevel: Int)
+// Firmas actualizadas. Estas reemplazan a las viejas del HardwareAbstractionLayer.
+data class MemoryProfile(
+    val availableMB: Long, 
+    val totalMB: Long, 
+    val pressurePercent: Int, 
+    val isLowMemory: Boolean
+)
+
+data class ThermalProfile(
+    val cpuTempC: Float, 
+    val isThrottling: Boolean, 
+    val batteryLevel: Int
+)
 
 object OmniDeviceHAL {
-    
     fun getMemoryProfile(context: Context): MemoryProfile {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memoryInfo = ActivityManager.MemoryInfo()
@@ -34,11 +44,9 @@ object OmniDeviceHAL {
         val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         val batteryPct = if (scale > 0) (level * 100) / scale else -1
 
-        // La temperatura de batería es un proxy excelente y seguro de obtener para el thermal throttling de CPU
         val tempTenths = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
         val tempC = tempTenths / 10.0f
 
-        // Heurística de degradación táctica:
         val isThrottling = tempC >= 39.0f || batteryPct in 1..15
 
         return ThermalProfile(
