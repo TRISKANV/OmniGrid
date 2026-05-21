@@ -6,22 +6,37 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 // ==========================================================================
-// EVENTOS NATIVOS REALES DEL SISTEMA OPERATIVO
+// MODELOS LEGACY (Mantenidos para que la UI actual no colapse durante la transición)
+// ==========================================================================
+enum class SystemStressLevel { NORMAL, ELEVATED, CRITICAL }
+
+data class TelemetryEntry(
+    val cpuUsage: Float,
+    val ramUsage: Float,
+    val temperature: Float = 0f,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+// ==========================================================================
+// EVENTOS NATIVOS DEL SISTEMA OPERATIVO
 // ==========================================================================
 sealed class OmniEvent {
-    // Consume el estado real de hardware y runtime
-    data class TelemetryEmitted(val state: HardwareState) : OmniEvent()
-    // Registra transiciones térmicas reales detectadas por el sistema
+    // --- EVENTOS NUEVOS (Fase Real Hardware) ---
+    data class HardwareTelemetryEmitted(val state: HardwareState) : OmniEvent()
     data class ThermalStateChanged(val oldState: ThermalState, val newState: ThermalState) : OmniEvent()
-    data class PluginStateChanged(val pluginId: String, val isActive: Boolean) : OmniEvent()
     data class HardwareWarning(val message: String) : OmniEvent()
     
-    // Envoltorio puente para los eventos que vienen de los plugins
+    // --- EVENTOS LEGACY (Para retrocompatibilidad de la UI) ---
+    data class TelemetryEmitted(val entry: TelemetryEntry) : OmniEvent()
+    data class SystemStressChanged(val oldLevel: SystemStressLevel, val newLevel: SystemStressLevel) : OmniEvent()
+    
+    // --- EVENTOS DE PLUGINS ---
+    data class PluginStateChanged(val pluginId: String, val isActive: Boolean) : OmniEvent()
     data class PluginSystemEvent(val type: String, val payload: Map<String, Any>) : OmniEvent()
 }
 
 // ==========================================================================
-// EVENTOS DE PLUGINS (Como el SecureVaultPlugin)
+// EVENTOS DE PLUGINS MODULARES
 // ==========================================================================
 data class SystemEvent(
     val type: String,
@@ -35,12 +50,10 @@ object CoreEventBus {
     private val _events = MutableSharedFlow<OmniEvent>(extraBufferCapacity = 128)
     val events = _events.asSharedFlow()
 
-    // Publicación atómica de eventos del sistema central
     fun publish(event: OmniEvent) {
         _events.tryEmit(event)
     }
 
-    // Emisión desde módulos/plugins independientes
     fun emit(event: SystemEvent) {
         _events.tryEmit(OmniEvent.PluginSystemEvent(event.type, event.payload))
     }
