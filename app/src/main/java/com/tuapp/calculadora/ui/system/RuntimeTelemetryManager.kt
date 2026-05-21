@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-enum class LogLevel { INFO, WARN, ERROR, CRITICAL }
+enum class LogLevel { INFO, WARN, CRITICAL, EXEC }
 
 data class TelemetryEntry(
     val timestamp: Long = System.currentTimeMillis(),
