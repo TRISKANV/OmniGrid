@@ -1,14 +1,18 @@
 package com.tuapp.calculadora.ui.system
 
+import com.tuapp.calculadora.ui.system.model.HardwareState
+import com.tuapp.calculadora.ui.system.model.ThermalState
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 // ==========================================================================
-// EVENTOS NATIVOS DEL SISTEMA OPERATIVO
+// EVENTOS NATIVOS REALES DEL SISTEMA OPERATIVO
 // ==========================================================================
 sealed class OmniEvent {
-    data class TelemetryEmitted(val entry: TelemetryEntry) : OmniEvent()
-    data class SystemStressChanged(val oldLevel: SystemStressLevel, val newLevel: SystemStressLevel) : OmniEvent()
+    // Consume el estado real de hardware y runtime
+    data class TelemetryEmitted(val state: HardwareState) : OmniEvent()
+    // Registra transiciones térmicas reales detectadas por el sistema
+    data class ThermalStateChanged(val oldState: ThermalState, val newState: ThermalState) : OmniEvent()
     data class PluginStateChanged(val pluginId: String, val isActive: Boolean) : OmniEvent()
     data class HardwareWarning(val message: String) : OmniEvent()
     
@@ -28,15 +32,15 @@ data class SystemEvent(
 // CORE EVENT BUS
 // ==========================================================================
 object CoreEventBus {
-    private val _events = MutableSharedFlow<OmniEvent>(extraBufferCapacity = 64)
+    private val _events = MutableSharedFlow<OmniEvent>(extraBufferCapacity = 128)
     val events = _events.asSharedFlow()
 
-    // Método Legacy usado por el motor de IA y Telemetría del OS
+    // Publicación atómica de eventos del sistema central
     fun publish(event: OmniEvent) {
         _events.tryEmit(event)
     }
 
-    // Método Nuevo usado por los Plugins modulares (SecureVault, etc.)
+    // Emisión desde módulos/plugins independientes
     fun emit(event: SystemEvent) {
         _events.tryEmit(OmniEvent.PluginSystemEvent(event.type, event.payload))
     }
