@@ -39,6 +39,10 @@ object RuntimeIntelligenceEngine {
     private val _adaptiveConfig = MutableStateFlow(AdaptiveUIConfig(8.dp, 1.0f, 0.5f, true, 100))
     val adaptiveConfig: StateFlow<AdaptiveUIConfig> = _adaptiveConfig.asStateFlow()
 
+    // Shim para el ModularDashboard antiguo
+    private val _anomalies = MutableStateFlow<List<String>>(emptyList())
+    val anomalies: StateFlow<List<String>> = _anomalies.asStateFlow()
+
     private var engineJob: Job? = null
 
     fun bootEngine(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
@@ -56,7 +60,15 @@ object RuntimeIntelligenceEngine {
         }
     }
 
-    private fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
+    // Shim para medir el throughput de eventos desde la plataforma base
+    fun reportEventThroughput(throughput: Int) {
+        if (throughput > 500) {
+            RuntimeTelemetryManager.log("ENGINE", "High event throughput detected: $throughput ev/s", LogLevel.WARN)
+        }
+    }
+
+    // Se cambia de private a público/internal para permitir llamadas externas heredadas
+    fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
         val oldStress = _stressLevel.value
         
         val newStress = when {
