@@ -1,26 +1,31 @@
 package com.tuapp.calculadora.ui.system
 
+import android.content.Context
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
-// Importamos las clases de datos directamente asumiendo que son top-level en su paquete
-import com.tuapp.calculadora.ui.system.hal.ThermalProfile
 import com.tuapp.calculadora.ui.system.hal.MemoryProfile
+import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
+import com.tuapp.calculadora.ui.system.hal.ThermalProfile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 enum class SystemStressLevel { NOMINAL, ELEVATED, SEVERE, CRITICAL }
 
-// La configuración que la UI leerá para degradarse o mejorarse sutilmente
 data class AdaptiveUIConfig(
     val blurRadius: Dp,
-    val animationScale: Float, // 1.0f = normal, 0.0f = sin animaciones
+    val animationScale: Float,
     val ambientGlowOpacity: Float,
     val enableHaptics: Boolean,
-    val renderComplexity: Int // 100 = full, 50 = simplified
+    val renderComplexity: Int 
 )
 
 val LocalAdaptiveConfig = compositionLocalOf { 
@@ -31,22 +36,51 @@ object RuntimeIntelligenceEngine {
     private val _stressLevel = MutableStateFlow(SystemStressLevel.NOMINAL)
     val stressLevel: StateFlow<SystemStressLevel> = _stressLevel.asStateFlow()
 
-    // FIX 1: Inicializamos el StateFlow con una instancia limpia en lugar de buscar el defaultFactory
     private val _adaptiveConfig = MutableStateFlow(AdaptiveUIConfig(8.dp, 1.0f, 0.5f, true, 100))
     val adaptiveConfig: StateFlow<AdaptiveUIConfig> = _adaptiveConfig.asStateFlow()
 
-    // FIX 2: Usamos las clases directamente sin el prefijo OmniDeviceHAL.
-    fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
+    private var engineJob: Job? = null
+
+    // Inicializa el latido operativo del sistema
+    fun bootEngine(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
+        if (engineJob != null) return
+        
+        RuntimeTelemetryManager.log("ENGINE", "Living Runtime Booting: Hardware bindings established", LogLevel.INFO)
+        
+        engineJob = scope.launch {
+            while (isActive) {
+                val thermal = OmniDeviceHAL.getThermalProfile(context)
+                val memory = OmniDeviceHAL.getMemoryProfile(context)
+                analyzeSystemCycle(thermal, memory)
+                
+                // Tick operativo: 5 segundos. Suficiente para tiempo real, seguro para batería.
+                delay(5000) 
+            }
+        }
+    }
+
+    private fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
+        val oldStress = _stressLevel.value
+        
         val newStress = when {
-            thermal.isThrottling || memory.pressurePercent > 90 -> SystemStressLevel.CRITICAL
-            thermal.cpuTempC > 75 || memory.pressurePercent > 80 -> SystemStressLevel.SEVERE
-            thermal.cpuTempC > 60 || memory.pressurePercent > 65 -> SystemStressLevel.ELEVATED
+            thermal.isThrottling || memory.pressurePercent > 85 || memory.isLowMemory -> SystemStressLevel.CRITICAL
+            thermal.cpuTempC > 38.0f || memory.pressurePercent > 75 -> SystemStressLevel.SEVERE
+            thermal.cpuTempC > 35.0f || memory.pressurePercent > 65 -> SystemStressLevel.ELEVATED
             else -> SystemStressLevel.NOMINAL
         }
 
-        if (_stressLevel.value != newStress) {
+        // Telemetría viva del entorno real (El Timeline se llenará con esto)
+        val logLvl = if (newStress == SystemStressLevel.NOMINAL) LogLevel.INFO else LogLevel.WARN
+        RuntimeTelemetryManager.log(
+            "HAL_POLL",
+            "RAM: ${memory.availableMB}MB free (${memory.pressurePercent}% loaded) | Temp: ${thermal.cpuTempC}°C | Bat: ${thermal.batteryLevel}%",
+            logLvl
+        )
+
+        if (oldStress != newStress) {
             _stressLevel.value = newStress
-            RuntimeTelemetryManager.log("INTELLIGENCE", "System stress shifted to ${newStress.name}", LogLevel.WARN)
+            CoreEventBus.publish(OmniEvent.SystemStressChanged(oldStress, newStress))
+            RuntimeTelemetryManager.log("INTELLIGENCE", "System stress shifted: ${oldStress.name} -> ${newStress.name}", if (newStress == SystemStressLevel.CRITICAL) LogLevel.CRITICAL else LogLevel.WARN)
             recalculateAdaptiveConfig(newStress)
         }
     }
