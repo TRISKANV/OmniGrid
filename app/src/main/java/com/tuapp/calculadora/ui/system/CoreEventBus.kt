@@ -2,20 +2,10 @@ package com.tuapp.calculadora.ui.system
 
 import com.tuapp.calculadora.ui.system.model.HardwareState
 import com.tuapp.calculadora.ui.system.model.ThermalState
+import com.tuapp.calculadora.ui.system.model.SystemStressLevel
+import com.tuapp.calculadora.ui.system.model.TelemetryEntry
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-
-// ==========================================================================
-// MODELOS LEGACY (Mantenidos para que la UI actual no colapse durante la transición)
-// ==========================================================================
-enum class SystemStressLevel { NORMAL, ELEVATED, CRITICAL }
-
-data class TelemetryEntry(
-    val cpuUsage: Float,
-    val ramUsage: Float,
-    val temperature: Float = 0f,
-    val timestamp: Long = System.currentTimeMillis()
-)
 
 // ==========================================================================
 // EVENTOS NATIVOS DEL SISTEMA OPERATIVO
