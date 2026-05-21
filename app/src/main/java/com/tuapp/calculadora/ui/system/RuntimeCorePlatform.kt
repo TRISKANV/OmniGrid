@@ -2,22 +2,21 @@ package com.tuapp.calculadora.ui.system
 
 import androidx.compose.runtime.Composable
 import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
-import com.tuapp.calculadora.ui.system.hal.RuntimeIntelligenceEngine
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 // ==========================================================================
 // 1. RUNTIME EVENT BUS & EVENT DEFINITIONS
-// Se combinan los eventos Legacy (para no romper la app) y los del nuevo OS
+// Se renombra a CoreLogLevel para evitar la colisión de paquetes con Telemetry
 // ==========================================================================
-enum class LogLevel { INFO, WARN, CRITICAL, EXEC }
+enum class CoreLogLevel { INFO, WARN, CRITICAL, EXEC }
 
 sealed class RuntimeEvent {
     val timestamp: Long = java.lang.System.currentTimeMillis()
 
     // --- Legacy Events (Mantenidos para retrocompatibilidad) ---
-    data class System(val msg: String, val level: LogLevel) : RuntimeEvent()
+    data class System(val msg: String, val level: CoreLogLevel) : RuntimeEvent()
     data class Security(val tag: String, val event: String, val integrityAlert: Boolean) : RuntimeEvent()
     data class Transport(val protocol: String, val target: String, val status: String) : RuntimeEvent()
     data class Hardware(val subsystem: String, val alert: String, val loadFactor: Float) : RuntimeEvent()
@@ -75,8 +74,9 @@ object SessionOrchestrator {
     fun tick() {
         val session = activeSession ?: return
         val mem = OmniDeviceHAL.fetchMemoryProfile()
-        if (mem.totalMb - mem.availableMb > session.peakMemoryUsageMb) {
-            session.peakMemoryUsageMb = mem.totalMb - mem.availableMb
+        // Ajustado a las propiedades correctas en mayúsculas (MB)
+        if (mem.totalMB - mem.availableMB > session.peakMemoryUsageMb) {
+            session.peakMemoryUsageMb = mem.totalMB - mem.availableMB
         }
         RuntimeIntelligenceEngine.analyzeSystemCycle(OmniDeviceHAL.fetchThermalProfile(), mem)
     }
@@ -86,11 +86,10 @@ object SessionOrchestrator {
 
 // ==========================================================================
 // 3. LEGACY ADAPTERS & BRIDGES (Evita el error <Error module> en KAPT)
-// Estos objetos actúan como puentes hacia la nueva arquitectura.
 // ==========================================================================
 object RuntimeEventBus {
     fun emit(event: RuntimeEvent) {
-        OmniEventBus.dispatch(event) // Redirige el tráfico viejo al nuevo motor
+        OmniEventBus.dispatch(event) 
     }
 }
 
@@ -121,12 +120,10 @@ enum class ModuleSize { SMALL, WIDE }
 
 data class PluginMetadata(val id: String, val name: String, val version: String, val priority: Int)
 
-// Asumiendo que RuntimeMetrics existe en otro archivo del paquete
 interface RuntimePlugin {
     val metadata: PluginMetadata
     fun onPluginAttach()
     fun onPluginDetach()
-    // Nota: El sistema legacy requiere este contrato.
 }
 
 data class DeviceHardwareState(
