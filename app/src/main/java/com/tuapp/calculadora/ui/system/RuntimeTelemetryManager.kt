@@ -39,7 +39,15 @@ class RuntimeTelemetryManager(
         samplingJob?.cancel()
         samplingJob = externalScope.launch(Dispatchers.IO) {
             while (isActive) {
-                _telemetryState.value = collectRealMetrics()
+                val realState = collectRealMetrics()
+                _telemetryState.value = realState
+                
+                // Actualiza dinámicamente la cola del Bus de Eventos para el monitoreo interno
+                updateQueueSize(realState.runtime.eventBusQueueSize)
+                
+                // Publica el estado real en el CoreEventBus para alimentar la Timeline y el HUD en tiempo real
+                CoreEventBus.publish(OmniEvent.TelemetryEmitted(realState))
+                
                 delay(sampleIntervalMs)
             }
         }
