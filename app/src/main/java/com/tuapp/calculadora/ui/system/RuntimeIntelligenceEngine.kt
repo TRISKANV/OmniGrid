@@ -41,7 +41,6 @@ object RuntimeIntelligenceEngine {
 
     private var engineJob: Job? = null
 
-    // Inicializa el latido operativo del sistema
     fun bootEngine(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
         if (engineJob != null) return
         
@@ -52,8 +51,6 @@ object RuntimeIntelligenceEngine {
                 val thermal = OmniDeviceHAL.getThermalProfile(context)
                 val memory = OmniDeviceHAL.getMemoryProfile(context)
                 analyzeSystemCycle(thermal, memory)
-                
-                // Tick operativo: 5 segundos. Suficiente para tiempo real, seguro para batería.
                 delay(5000) 
             }
         }
@@ -69,7 +66,6 @@ object RuntimeIntelligenceEngine {
             else -> SystemStressLevel.NOMINAL
         }
 
-        // Telemetría viva del entorno real (El Timeline se llenará con esto)
         val logLvl = if (newStress == SystemStressLevel.NOMINAL) LogLevel.INFO else LogLevel.WARN
         RuntimeTelemetryManager.log(
             "HAL_POLL",
