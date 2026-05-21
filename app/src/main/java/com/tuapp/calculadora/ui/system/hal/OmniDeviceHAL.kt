@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 
-// Firmas actualizadas. Estas reemplazan a las viejas del HardwareAbstractionLayer.
 data class MemoryProfile(
     val availableMB: Long, 
     val totalMB: Long, 
@@ -55,4 +54,8 @@ object OmniDeviceHAL {
             batteryLevel = batteryPct
         )
     }
+
+    // Puentes de compatibilidad para evitar romper RuntimeCorePlatform y la UI
+    fun fetchMemoryProfile(context: Context): MemoryProfile = getMemoryProfile(context)
+    fun fetchThermalProfile(context: Context): ThermalProfile = getThermalProfile(context)
 }
