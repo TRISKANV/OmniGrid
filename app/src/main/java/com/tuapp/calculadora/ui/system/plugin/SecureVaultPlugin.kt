@@ -20,7 +20,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.UUID
 import kotlin.random.Random
 
 // ==========================================================================
@@ -72,11 +71,9 @@ class SecureVaultPlugin : OmniPlugin {
             SecureVaultWidget(this@SecureVaultPlugin, modifier)
         }
         override fun onWidgetVisible() {
-            // Activar telemetría caliente si el widget está en pantalla
             logRuntimeEvent("METRICS_STREAM_FOCUS", "Widget de bóveda visible en el HUD.")
         }
         override fun onWidgetHidden() {
-            // Reducir consumo si no se está visualizando
             logRuntimeEvent("METRICS_STREAM_IDLE", "Widget oculto, reduciendo ciclo de refresco secundario.")
         }
     }
@@ -89,18 +86,16 @@ class SecureVaultPlugin : OmniPlugin {
         pluginScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         _vaultState.value = VaultState.LOCKED
         
-        // Escuchar reactivamente al RuntimeIntelligenceEngine para aplicar Throttling y Comportamiento Adaptativo
         pluginScope.launch {
             RuntimeIntelligenceEngine.anomalies.collect { anomalies ->
                 if (anomalies.isNotEmpty()) {
-                    // Estado crítico detectado por la IA -> Actuar de inmediato de forma autónoma
-                    _adaptiveRefreshRateMs.value = 3000L // Relajar refresco de UI a 3s para liberar la GPU
+                    _adaptiveRefreshRateMs.value = 3000L 
                     if (_vaultState.value == VaultState.UNLOCKED) {
                         _vaultState.value = VaultState.DEGRADED_PROCESSING
                     }
-                    logRuntimeEvent("VAULT_ADAPTIVE_THROTTLE", "Fricción térmica o anomalía del sistema detectada. Entrando en modo de protección de batería/recomposición reducida.")
+                    logRuntimeEvent("VAULT_ADAPTIVE_THROTTLE", "Fricción térmica o anomalía detectada. Activando protección.")
                 } else {
-                    _adaptiveRefreshRateMs.value = 1000L // Volver a frecuencia nominal
+                    _adaptiveRefreshRateMs.value = 1000L
                     if (_vaultState.value == VaultState.DEGRADED_PROCESSING) {
                         _vaultState.value = VaultState.UNLOCKED
                     }
@@ -108,7 +103,6 @@ class SecureVaultPlugin : OmniPlugin {
             }
         }
 
-        // Loop Simulado de operaciones en segundo plano y telemetría de procesamiento en vivo
         pluginScope.launch {
             while (isActive) {
                 if (_vaultState.value != VaultState.LOCKED) {
@@ -122,8 +116,7 @@ class SecureVaultPlugin : OmniPlugin {
                         storageUsedBytes = _metrics.value.storageUsedBytes + if (!isDegraded) Random.nextLong(1024, 8192) else 0L
                     )
 
-                    // Publicar métricas crudas en el Bus Central
-                    if (!isDegraded || Random.nextFloat() > 0.7f) { // Omitir telemetría secundaria si está bajo estrés
+                    if (!isDegraded || Random.nextFloat() > 0.7f) {
                         CoreEventBus.emit(SystemEvent("VAULT_IO_METRICS", mapOf(
                             "throughput" to simulatedThroughput,
                             "latency" to simulatedLatency,
@@ -158,7 +151,7 @@ class SecureVaultPlugin : OmniPlugin {
             }
             "ACTION_LOCK" -> {
                 _vaultState.value = VaultState.LOCKED
-                logRuntimeEvent("VAULT_LOCK_COMMAND", "Cierre explícito de la zona de almacenamiento seguro solicitado por el orquestador.")
+                logRuntimeEvent("VAULT_LOCK_COMMAND", "Cierre explícito de la zona de almacenamiento seguro solicitado.")
                 Result.success(Unit)
             }
             "INJECT_ANOMALY" -> {
@@ -180,7 +173,6 @@ class SecureVaultPlugin : OmniPlugin {
     }
 
     private fun logRuntimeEvent(type: String, description: String) {
-        // Registro centralizado e inyección automática en la Operational Timeline
         CoreEventBus.emit(SystemEvent(type, mapOf("description" to description, "origin" to manifest.pluginId)))
     }
 }
@@ -193,7 +185,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
     val state by plugin.vaultState.collectAsState()
     val metrics by plugin.metrics.collectAsState()
 
-    // Animación GPU de latido táctico para indicar salud de cifrado
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.4f,
@@ -210,7 +201,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
             .fillMaxWidth()
             .padding(4.dp)
     ) {
-        // Fila de Encabezado de Estado Criptográfico
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -250,7 +240,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Barra de Almacenamiento OLED / Glass
         val usedMb = metrics.storageUsedBytes / (1024f * 1024f)
         val maxMb = metrics.storageMaxBytes / (1024f * 1024f)
         val fillPct = (usedMb / maxMb).coerceIn(0f, 1f)
@@ -275,7 +264,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
-                    // FIX: Error tipográfico de color solucionado aquí
                     .background(Color(0xFF222222), RoundedCornerShape(2.dp))
             ) {
                 Box(
@@ -289,7 +277,6 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Grid de Métricas de Rendimiento en Tiempo Real (I/O)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -304,7 +291,8 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            Column(alignment = Alignment.End) {
+            // FIX: Corregido alignment -> horizontalAlignment
+            Column(horizontalAlignment = Alignment.End) {
                 Text("HARDWARE_LATENCY", color = Color.Gray, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
                 Text(
                     text = "${metrics.averageLatencyMs} ms",
@@ -320,13 +308,11 @@ fun SecureVaultWidget(plugin: SecureVaultPlugin, modifier: Modifier) {
             }
         }
 
-        // Fila de Control Criptográfico Rápido (Solo visible en simulación)
         Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
         ) {
-            // Acciones emuladas inter-plugin a través de disparadores tácticos
             Box(
                 modifier = Modifier
                     .background(Color(0xFF1E1E1E), RoundedCornerShape(4.dp))
