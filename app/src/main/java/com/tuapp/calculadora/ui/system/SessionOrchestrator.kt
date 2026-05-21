@@ -7,11 +7,14 @@ package com.tuapp.calculadora.ui.system
 object SessionOrchestrator {
     val isSessionActive: Boolean = true
     val currentToken: String = "OMNI_SYS_TOKEN_MOCK"
+    
+    // Variables agregadas para destrabar la línea 118
+    val sessionId: String = "SESSION_12345"
+    val status: String = "ACTIVE"
 
     fun validateSession() = true
     fun clearSession() { /* No-op */ }
     
-    // Métodos agregados para satisfacer las llamadas huérfanas en ModularDashboard:
     fun bootstrapSession() { /* No-op */ }
     fun tick() { /* No-op */ }
     fun getSessionManifest(): String = "MOCK_MANIFEST_OK"
