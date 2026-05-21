@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// Única fuente de verdad para LogLevel
 enum class LogLevel { INFO, WARN, ERROR, CRITICAL }
 
 data class TelemetryEntry(
@@ -14,6 +13,9 @@ data class TelemetryEntry(
     val message: String,
     val level: LogLevel
 )
+
+// Shims de compatibilidad para la UI antigua
+typealias LogEntry = TelemetryEntry
 
 object RuntimeTelemetryManager {
     private const val MAX_LOG_HISTORY = 150 
