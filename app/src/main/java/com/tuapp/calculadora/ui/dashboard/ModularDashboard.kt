@@ -4,12 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.*
-// FIX: KAPT crashea sin el import explícito de items para el Grid
 import androidx.compose.foundation.lazy.staggeredgrid.items 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-// FIX: Import requerido para transformar StateFlow en State Compose
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuapp.calculadora.ui.system.*
-// FIX: Ruta corregida. Se eliminó el ".hal" que causaba el Unresolved Reference
 import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
 import com.tuapp.calculadora.ui.system.plugin.SecureVaultPlugin
 import com.tuapp.calculadora.ui.system.sdk.*
@@ -71,7 +68,7 @@ class CoreTelemetryPlugin : OmniPlugin {
 fun ModularDashboardScreen() {
     val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
     
-    // Inyección de dependencias dinámica mediante instanciación de Plugins Nativos y ordenación por jerarquía visual
+    // Inyección de dependencias dinámica mediante instanciación de Plugins Nativos
     val loadedPlugins = remember {
         listOf(
             SecureVaultPlugin().apply { 
@@ -149,7 +146,18 @@ fun ModularDashboardScreen() {
                 verticalItemSpacing = 12.dp,
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(loadedPlugins, key = { it.manifest.pluginId }) { plugin ->
+                // FIX: El span se define a nivel del DSL items() en lugar del Modifier para soportar KAPT limpio
+                items(
+                    items = loadedPlugins,
+                    key = { it.manifest.pluginId },
+                    span = { plugin ->
+                        if (plugin.manifest.visualPriority == 0) {
+                            StaggeredGridItemSpan.FullLine
+                        } else {
+                            StaggeredGridItemSpan.SingleLane
+                        }
+                    }
+                ) { plugin ->
                     PluginContainer(plugin = plugin)
                 }
             }
@@ -159,13 +167,9 @@ fun ModularDashboardScreen() {
 
 @Composable
 fun PluginContainer(plugin: OmniPlugin) {
-    // Si la prioridad es 0, toma las dos columnas completas de la grilla asimétrica (Layout Flagship)
+    // Si ocupa todo el ancho adaptamos el aspecto
     val isWide = plugin.manifest.visualPriority == 0
-    val modifier = if (isWide) {
-        Modifier.fillMaxWidth().staggeredGridItemSpan(StaggeredGridItemSpan.FullLine)
-    } else {
-        Modifier.aspectRatio(1f)
-    }
+    val modifier = if (isWide) Modifier.fillMaxWidth() else Modifier.aspectRatio(1f)
 
     Box(
         modifier = modifier
