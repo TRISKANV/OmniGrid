@@ -1,104 +1,61 @@
 package com.tuapp.calculadora.ui.dashboard
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import com.tuapp.calculadora.ui.system.*
+import androidx.compose.ui.unit.dp
+import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
 
 @Composable
-fun OmniOSCockpit(content: @Composable () -> Unit) {
-    val adaptiveConfig by RuntimeIntelligenceEngine.adaptiveConfig.collectAsState()
-    val stressLevel by RuntimeIntelligenceEngine.stressLevel.collectAsState()
-    val haptics = LocalHapticFeedback.current
+fun OmniOSCockpit(modifier: Modifier = Modifier) {
+    // Recolectamos el estado de optimización real en tiempo de ejecución
+    val adaptationHint by RuntimeIntelligenceEngine.adaptationHint.collectAsState()
+    val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
 
-    // Efecto físico al cambiar de estado de estrés
-    LaunchedEffect(stressLevel) {
-        if (adaptiveConfig.enableHaptics && stressLevel != SystemStressLevel.NOMINAL) {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        }
-    }
-
-    CompositionLocalProvider(LocalAdaptiveConfig provides adaptiveConfig) {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF030303))) {
-            
-            // 1. AMBIENT RUNTIME PULSE (Fondo vivo)
-            AmbientRuntimePulse(stressLevel, adaptiveConfig)
-
-            // 2. EL CONTENIDO DE LA APP (Dashboard, etc.)
-            Box(modifier = Modifier.fillMaxSize()) {
-                content()
-            }
-
-            // 3. SYSTEM STRESS OVERLAY (Vignette de emergencia, ignora toques)
-            SystemStressOverlay(stressLevel)
-        }
-    }
-}
-
-@Composable
-private fun AmbientRuntimePulse(stress: SystemStressLevel, config: AdaptiveUIConfig) {
-    val infiniteTransition = rememberInfiniteTransition()
-    
-    // Si la escala de animación es 0 (CRITICAL), pausamos el pulso
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f * config.ambientGlowOpacity,
-        targetValue = 0.8f * config.ambientGlowOpacity,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = (2000 / (config.animationScale.takeIf { it > 0 } ?: 0.01f)).toInt(), easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
+    Column(modifier = modifier.padding(16.dp)) {
+        Text(
+            text = "Hardware Engine Monitor", 
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary
         )
-    )
+        Spacer(modifier = Modifier.height(12.dp))
 
-    val baseColor by animateColorAsState(
-        targetValue = when (stress) {
-            SystemStressLevel.NOMINAL -> Color(0xFF001A22)
-            SystemStressLevel.ELEVATED -> Color(0xFF221500)
-            SystemStressLevel.SEVERE -> Color(0xFF220500)
-            SystemStressLevel.CRITICAL -> Color(0xFF330000)
-        },
-        animationSpec = tween(1500)
-    )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = "Métricas de Adaptación Activas:", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(text = "• Reducir desenfoque (Blur): ${if (adaptationHint.reduceBlur) "ACTIVADO ⚠" else "DESACTIVADO"}")
+                Text(text = "• Mitigar animaciones (Motion): ${if (adaptationHint.reduceMotion) "ACTIVADO ⚠" else "DESACTIVADO"}")
+                Text(text = "• UI Simplificada (Rendering): ${if (adaptationHint.simplifyRendering) "FORZADO 🚨" else "NORMAL"}")
+                Text(text = "• Delay de Muestreo Telemetría: ${adaptationHint.throttleTelemetryMs}ms")
+            }
+        }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer { alpha = pulseAlpha } // Rendering directo en GPU
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(baseColor, Color.Transparent),
-                    radius = 1500f
-                )
+        if (anomalies.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Anomalías Críticas Detectadas:", 
+                style = MaterialTheme.typography.titleMedium, 
+                color = MaterialTheme.colorScheme.error
             )
-    )
-}
-
-@Composable
-private fun SystemStressOverlay(stress: SystemStressLevel) {
-    val targetAlpha = if (stress == SystemStressLevel.CRITICAL) 0.5f else 0f
-    val alphaState by animateFloatAsState(targetValue = targetAlpha, animationSpec = tween(500))
-
-    if (alphaState > 0f) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = alphaState }
-                .drawBehind {
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color.Transparent, Color.Red.copy(alpha = 0.4f)),
-                            radius = size.width * 0.8f
-                        )
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(anomalies) { anomaly ->
+                    Text(
+                        text = "🚨 CORRUPCIÓN / ESTRÉS: $anomaly",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-        )
+            }
+        }
     }
 }
