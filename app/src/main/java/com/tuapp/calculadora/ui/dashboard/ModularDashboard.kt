@@ -21,6 +21,7 @@ import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
 import com.tuapp.calculadora.ui.system.plugin.SecureVaultPlugin
 import com.tuapp.calculadora.ui.system.sdk.*
 import kotlinx.coroutines.delay
+import com.tuapp.calculadora.ui.system.SessionOrchestrator
 
 // ==========================================================================
 // MOCK PLUGIN (Ejemplo nativo de la nueva arquitectura OmniPlugin)
