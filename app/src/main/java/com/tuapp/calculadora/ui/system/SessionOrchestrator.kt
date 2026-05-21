@@ -10,4 +10,9 @@ object SessionOrchestrator {
 
     fun validateSession() = true
     fun clearSession() { /* No-op */ }
+    
+    // Métodos agregados para satisfacer las llamadas huérfanas en ModularDashboard:
+    fun bootstrapSession() { /* No-op */ }
+    fun tick() { /* No-op */ }
+    fun getSessionManifest(): String = "MOCK_MANIFEST_OK"
 }
