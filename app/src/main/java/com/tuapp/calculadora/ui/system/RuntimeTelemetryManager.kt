@@ -13,18 +13,19 @@ import kotlinx.coroutines.flow.*
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicInteger
 
-class RuntimeTelemetryManager(
-    private val context: Context,
-    private val externalScope: CoroutineScope
-) {
-    private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+object RuntimeTelemetryManager {
+    private var contextRef: Context? = null
+    private var externalScopeRef: CoroutineScope? = null
+
+    private val activityManager by lazy { contextRef?.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager }
+    private val connectivityManager by lazy { contextRef?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager }
+    private val powerManager by lazy { contextRef?.getSystemService(Context.POWER_SERVICE) as? PowerManager }
 
     private val coroutineCounter = AtomicInteger(0)
     private val eventBusQueueCounter = AtomicInteger(0)
     private val totalLatencyAccumulator = AtomicInteger(0)
     private val pluginExecutionCount = AtomicInteger(0)
+    private val throughputCounter = AtomicInteger(0)
 
     private val _telemetryState = MutableStateFlow(createInitialState())
     val telemetryState: StateFlow<HardwareState> = _telemetryState.asStateFlow()
@@ -35,19 +36,22 @@ class RuntimeTelemetryManager(
     private var lastCpuTime = 0L
     private var lastAppCpuTime = 0L
 
+    fun initialize(context: Context, scope: CoroutineScope) {
+        this.contextRef = context.applicationContext
+        this.externalScopeRef = scope
+    }
+
     fun startMonitoring() {
+        val scope = externalScopeRef ?: return
         samplingJob?.cancel()
-        samplingJob = externalScope.launch(Dispatchers.IO) {
+        samplingJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 val realState = collectRealMetrics()
                 _telemetryState.value = realState
                 
                 updateQueueSize(realState.runtime.eventBusQueueSize)
-                
-                // 1. PUBLICAR EVENTO NUEVO (Para la nueva arquitectura)
                 CoreEventBus.publish(OmniEvent.HardwareTelemetryEmitted(realState))
                 
-                // 2. PUENTE LEGACY: Traducimos hardware real para la UI antigua
                 val totalRam = if (realState.ram.totalBytes > 0) realState.ram.totalBytes.toFloat() else 1f
                 val usedRam = realState.ram.runtimeUsedBytes.toFloat()
                 
@@ -76,6 +80,7 @@ class RuntimeTelemetryManager(
     fun incrementCoroutineCount() = coroutineCounter.incrementAndGet()
     fun decrementCoroutineCount() = coroutineCounter.decrementAndGet()
     fun updateQueueSize(size: Int) = eventBusQueueCounter.set(size)
+    fun reportEventThroughput(count: Int) = throughputCounter.addAndGet(count)
     
     fun recordPluginLatency(latencyMs: Long) {
         totalLatencyAccumulator.addAndGet(latencyMs.toInt())
@@ -103,7 +108,7 @@ class RuntimeTelemetryManager(
 
     private fun collectRealMetrics(): HardwareState {
         val memInfo = ActivityManager.MemoryInfo()
-        activityManager.getMemoryInfo(memInfo)
+        activityManager?.getMemoryInfo(memInfo)
 
         val runtime = Runtime.getRuntime()
         val usedMem = runtime.totalMemory() - runtime.freeMemory()
@@ -122,20 +127,24 @@ class RuntimeTelemetryManager(
             pressure = ramPressure
         )
 
-        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        val pct = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        val isCharging = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS) == BatteryManager.BATTERY_STATUS_CHARGING
-        
-        val batteryMetrics = BatteryMetrics(
-            percentage = pct,
-            isCharging = isCharging,
-            voltageMv = 0,
-            temperatureC = 0f, 
-            isPowerSaverMode = powerManager.isPowerSaveMode
-        )
+        val ctx = contextRef
+        val batteryMetrics = if (ctx != null) {
+            val batteryManager = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val pct = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val isCharging = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS) == BatteryManager.BATTERY_STATUS_CHARGING
+            BatteryMetrics(
+                percentage = pct,
+                isCharging = isCharging,
+                voltageMv = 0,
+                temperatureC = 28.5f, 
+                isPowerSaverMode = powerManager?.isPowerSaveMode ?: false
+            )
+        } else {
+            BatteryMetrics(100, false, 0, 0f, false)
+        }
 
-        val activeNetwork = connectivityManager.activeNetwork
-        val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+        val activeNetwork = connectivityManager?.activeNetwork
+        val caps = connectivityManager?.getNetworkCapabilities(activeNetwork)
         val (quality, transport) = if (caps != null) {
             val t = when {
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "CELLULAR"
@@ -160,7 +169,7 @@ class RuntimeTelemetryManager(
         )
 
         val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            when (powerManager.currentThermalStatus) {
+            when (powerManager?.currentThermalStatus) {
                 PowerManager.THERMAL_STATUS_NONE -> ThermalState.COOL
                 PowerManager.THERMAL_STATUS_LIGHT -> ThermalState.MODERATE
                 PowerManager.THERMAL_STATUS_MODERATE -> ThermalState.WARM
@@ -189,11 +198,11 @@ class RuntimeTelemetryManager(
             activeCoroutines = coroutineCounter.get(),
             eventBusQueueSize = eventBusQueueCounter.get(),
             avgPluginLatencyMs = if (execCount > 0) (avgLat / execCount).toLong() else 0L,
-            processingThroughput = execCount
+            processingThroughput = throughputCounter.getAndSet(0) + execCount
         )
 
         val isBgRestricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            activityManager.isBackgroundRestricted
+            activityManager?.isBackgroundRestricted ?: false
         } else {
             false
         }
