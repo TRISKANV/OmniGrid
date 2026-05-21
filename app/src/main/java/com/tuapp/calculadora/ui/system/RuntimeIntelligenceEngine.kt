@@ -32,19 +32,34 @@ class RuntimeIntelligenceEngine(
         }
     }
 
+    private fun mapThermalToLegacyStress(thermal: ThermalState): SystemStressLevel {
+        return when (thermal) {
+            ThermalState.COOL, ThermalState.MODERATE -> SystemStressLevel.NORMAL
+            ThermalState.WARM -> SystemStressLevel.ELEVATED
+            ThermalState.THROTTLING, ThermalState.CRITICAL -> SystemStressLevel.CRITICAL
+        }
+    }
+
     private suspend fun analyzeMetrics(state: HardwareState) {
         var needsReduceBlur = false
         var needsReduceMotion = false
         var targetedTelemetryDelay = 1000L
         var needsSimplifyRendering = false
 
-        // Monitoreo e informe de cambios en el estado térmico real
         if (state.thermal != lastThermalState) {
+            // 1. Notificación a la arquitectura nueva
             CoreEventBus.publish(OmniEvent.ThermalStateChanged(lastThermalState, state.thermal))
+            
+            // 2. Notificación puente a la UI antigua (SecureVault, etc.)
+            val oldLegacy = mapThermalToLegacyStress(lastThermalState)
+            val newLegacy = mapThermalToLegacyStress(state.thermal)
+            if (oldLegacy != newLegacy) {
+                CoreEventBus.publish(OmniEvent.SystemStressChanged(oldLegacy, newLegacy))
+            }
+            
             lastThermalState = state.thermal
         }
 
-        // 1. Análisis del Perfil Térmico Real e inyección al Journal Táctico
         when (state.thermal) {
             ThermalState.WARM -> {
                 needsReduceBlur = true
@@ -72,7 +87,6 @@ class RuntimeIntelligenceEngine(
             else -> {}
         }
 
-        // 2. Análisis de Presión en la memoria RAM Real
         when (state.ram.pressure) {
             MemoryPressure.HIGH -> {
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2000L)
@@ -90,14 +104,12 @@ class RuntimeIntelligenceEngine(
             else -> {}
         }
 
-        // 3. Estado Energético Real (Ahorro de batería del dispositivo)
         if (state.battery.isPowerSaverMode) {
             needsReduceMotion = true
             needsReduceBlur = true
             targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2500L)
         }
 
-        // 4. Congestión Interna del Runtime de la App
         if (state.runtime.eventBusQueueSize > 200 || state.runtime.avgPluginLatencyMs > 300L) {
             needsSimplifyRendering = true
             val msg = "Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos."
@@ -105,7 +117,6 @@ class RuntimeIntelligenceEngine(
             CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
         }
 
-        // Aplicación e inyección atómica de la directiva de adaptación si hay cambios del sistema
         val currentHint = _adaptationHint.value
         if (currentHint.reduceBlur != needsReduceBlur ||
             currentHint.reduceMotion != needsReduceMotion ||
