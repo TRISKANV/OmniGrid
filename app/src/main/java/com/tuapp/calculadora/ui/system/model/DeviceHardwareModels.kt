@@ -98,3 +98,19 @@ sealed class RuntimeSignal {
         val simplifyRendering: Boolean
     ) : RuntimeSignal()
 }
+
+// ==========================================================================
+// PUENTE DE RETROCOMPATIBILIDAD (Agregado para la UI Legacy)
+// ==========================================================================
+enum class SystemStressLevel { 
+    NORMAL, 
+    ELEVATED, 
+    CRITICAL 
+}
+
+data class TelemetryEntry(
+    val cpuUsage: Float,
+    val ramUsage: Float,
+    val temperature: Float = 0f,
+    val timestamp: Long = System.currentTimeMillis()
+)
