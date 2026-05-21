@@ -20,6 +20,9 @@ data class ThermalProfile(
 )
 
 object OmniDeviceHAL {
+    @Volatile
+    var appContext: Context? = null
+
     fun getMemoryProfile(context: Context): MemoryProfile {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memoryInfo = ActivityManager.MemoryInfo()
@@ -55,7 +58,14 @@ object OmniDeviceHAL {
         )
     }
 
-    // Puentes de compatibilidad para evitar romper RuntimeCorePlatform y la UI
-    fun fetchMemoryProfile(context: Context): MemoryProfile = getMemoryProfile(context)
-    fun fetchThermalProfile(context: Context): ThermalProfile = getThermalProfile(context)
+    // Shims sobrecargados: si no reciben contexto, usan el global o caen en un fallback seguro
+    fun fetchMemoryProfile(context: Context? = null): MemoryProfile {
+        val target = context ?: appContext ?: return MemoryProfile(1024, 4096, 25, false)
+        return getMemoryProfile(target)
+    }
+
+    fun fetchThermalProfile(context: Context? = null): ThermalProfile {
+        val target = context ?: appContext ?: return ThermalProfile(32.0f, false, 80)
+        return getThermalProfile(target)
+    }
 }
