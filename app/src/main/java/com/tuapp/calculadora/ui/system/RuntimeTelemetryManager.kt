@@ -42,11 +42,22 @@ class RuntimeTelemetryManager(
                 val realState = collectRealMetrics()
                 _telemetryState.value = realState
                 
-                // Actualiza dinámicamente la cola del Bus de Eventos para el monitoreo interno
                 updateQueueSize(realState.runtime.eventBusQueueSize)
                 
-                // Publica el estado real en el CoreEventBus para alimentar la Timeline y el HUD en tiempo real
-                CoreEventBus.publish(OmniEvent.TelemetryEmitted(realState))
+                // 1. PUBLICAR EVENTO NUEVO (Para la nueva arquitectura)
+                CoreEventBus.publish(OmniEvent.HardwareTelemetryEmitted(realState))
+                
+                // 2. PUENTE LEGACY: Traducimos hardware real para la UI antigua
+                val totalRam = if (realState.ram.totalBytes > 0) realState.ram.totalBytes.toFloat() else 1f
+                val usedRam = realState.ram.runtimeUsedBytes.toFloat()
+                
+                val legacyEntry = TelemetryEntry(
+                    cpuUsage = realState.cpu.usagePercentage,
+                    ramUsage = (usedRam / totalRam) * 100f,
+                    temperature = realState.battery.temperatureC,
+                    timestamp = realState.timestamp
+                )
+                CoreEventBus.publish(OmniEvent.TelemetryEmitted(legacyEntry))
                 
                 delay(sampleIntervalMs)
             }
