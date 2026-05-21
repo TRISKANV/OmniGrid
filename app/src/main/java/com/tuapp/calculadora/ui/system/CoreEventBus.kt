@@ -3,19 +3,19 @@ package com.tuapp.calculadora.ui.system
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-sealed class OmniEvent {
-    data class TelemetryEmitted(val entry: TelemetryEntry) : OmniEvent()
-    data class SystemStressChanged(val oldLevel: SystemStressLevel, val newLevel: SystemStressLevel) : OmniEvent()
-    data class PluginStateChanged(val pluginId: String, val isActive: Boolean) : OmniEvent()
-    data class HardwareWarning(val message: String) : OmniEvent()
-}
+// Estructura de datos requerida por el Vault y la Timeline
+data class SystemEvent(
+    val type: String,
+    val payload: Map<String, Any> = emptyMap()
+)
 
 object CoreEventBus {
-    // SharedFlow actúa como un bus de transmisión de SO. extraBufferCapacity evita cuellos de botella.
-    private val _events = MutableSharedFlow<OmniEvent>(extraBufferCapacity = 64)
+    // Buffer para no perder eventos tácticos de telemetría
+    private val _events = MutableSharedFlow<SystemEvent>(extraBufferCapacity = 64)
     val events = _events.asSharedFlow()
 
-    fun publish(event: OmniEvent) {
+    // Método expuesto para que los plugins inyecten eventos sin necesitar scopes
+    fun emit(event: SystemEvent) {
         _events.tryEmit(event)
     }
 }
