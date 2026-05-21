@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+// Única fuente de verdad para LogLevel
 enum class LogLevel { INFO, WARN, ERROR, CRITICAL }
 
 data class TelemetryEntry(
@@ -15,7 +16,6 @@ data class TelemetryEntry(
 )
 
 object RuntimeTelemetryManager {
-    // Mantenemos solo los últimos 150 eventos en memoria para garantizar OOM-safety
     private const val MAX_LOG_HISTORY = 150 
     
     private val _logs = MutableStateFlow<List<TelemetryEntry>>(emptyList())
@@ -29,7 +29,6 @@ object RuntimeTelemetryManager {
             if (newLogs.size > MAX_LOG_HISTORY) newLogs.takeLast(MAX_LOG_HISTORY) else newLogs
         }
         
-        // El log se transmite al instante a cualquier parte del OS que esté escuchando
         CoreEventBus.publish(OmniEvent.TelemetryEmitted(entry))
     }
 }
