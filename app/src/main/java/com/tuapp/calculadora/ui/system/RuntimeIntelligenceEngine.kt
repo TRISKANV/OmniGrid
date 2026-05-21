@@ -1,16 +1,21 @@
 package com.tuapp.calculadora.ui.system
 
 import com.tuapp.calculadora.ui.system.model.*
+import com.tuapp.calculadora.ui.system.CoreEventBus
+import com.tuapp.calculadora.ui.system.OmniEvent
+import com.tuapp.calculadora.ui.system.SystemStressLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class RuntimeIntelligenceEngine(
-    private val telemetryManager: RuntimeTelemetryManager,
-    private val externalScope: CoroutineScope
-) {
+object RuntimeIntelligenceEngine {
+    private var externalScopeRef: CoroutineScope? = null
+
     private val _signals = MutableSharedFlow<RuntimeSignal>(extraBufferCapacity = 64)
     val signals: SharedFlow<RuntimeSignal> = _signals.asSharedFlow()
+
+    private val _anomalies = MutableStateFlow<List<String>>(emptyList())
+    val anomalies: StateFlow<List<String>> = _anomalies.asStateFlow()
 
     private val _adaptationHint = MutableStateFlow(
         RuntimeSignal.PerformanceHint(
@@ -24,12 +29,18 @@ class RuntimeIntelligenceEngine(
 
     private var lastThermalState: ThermalState = ThermalState.COOL
 
-    fun initialize() {
-        externalScope.launch {
-            telemetryManager.telemetryState.collect { state ->
+    fun initialize(scope: CoroutineScope) {
+        this.externalScopeRef = scope
+        scope.launch {
+            RuntimeTelemetryManager.telemetryState.collect { state ->
                 analyzeMetrics(state)
             }
         }
+    }
+
+    fun analyzeSystemCycle() {
+        // Ejecución preventiva por tick de la CPU simulada/plataforma core
+        RuntimeTelemetryManager.reportEventThroughput(1)
     }
 
     private fun mapThermalToLegacyStress(thermal: ThermalState): SystemStressLevel {
@@ -45,18 +56,15 @@ class RuntimeIntelligenceEngine(
         var needsReduceMotion = false
         var targetedTelemetryDelay = 1000L
         var needsSimplifyRendering = false
+        val currentAnomalies = mutableListOf<String>()
 
         if (state.thermal != lastThermalState) {
-            // 1. Notificación a la arquitectura nueva
             CoreEventBus.publish(OmniEvent.ThermalStateChanged(lastThermalState, state.thermal))
-            
-            // 2. Notificación puente a la UI antigua (SecureVault, etc.)
             val oldLegacy = mapThermalToLegacyStress(lastThermalState)
             val newLegacy = mapThermalToLegacyStress(state.thermal)
             if (oldLegacy != newLegacy) {
                 CoreEventBus.publish(OmniEvent.SystemStressChanged(oldLegacy, newLegacy))
             }
-            
             lastThermalState = state.thermal
         }
 
@@ -72,6 +80,7 @@ class RuntimeIntelligenceEngine(
                 needsReduceMotion = true
                 targetedTelemetryDelay = 2000L
                 val msg = "Thermal Throttling severo. Modulando ciclos de reloj internos."
+                currentAnomalies.add("THERMAL_THROTTLING")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
@@ -81,6 +90,7 @@ class RuntimeIntelligenceEngine(
                 targetedTelemetryDelay = 3000L
                 needsSimplifyRendering = true
                 val msg = "PELIGRO TÉRMICO EN PROCESADOR. Forzando modo UI minimalista."
+                currentAnomalies.add("CRITICAL_THERMAL_OVERLOAD")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
@@ -98,6 +108,7 @@ class RuntimeIntelligenceEngine(
                 needsSimplifyRendering = true
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 4000L)
                 val msg = "Advertencia severa de memoria (LowMemory OS). OOM Inminente."
+                currentAnomalies.add("LOW_MEMORY_CRITICAL")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
                 CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
@@ -113,9 +124,12 @@ class RuntimeIntelligenceEngine(
         if (state.runtime.eventBusQueueSize > 200 || state.runtime.avgPluginLatencyMs > 300L) {
             needsSimplifyRendering = true
             val msg = "Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos."
+            currentAnomalies.add("RUNTIME_CONGESTION")
             _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
             CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
         }
+
+        _anomalies.value = currentAnomalies
 
         val currentHint = _adaptationHint.value
         if (currentHint.reduceBlur != needsReduceBlur ||
@@ -129,7 +143,7 @@ class RuntimeIntelligenceEngine(
                 throttleTelemetryMs = targetedTelemetryDelay,
                 simplifyRendering = needsSimplifyRendering
             )
-            telemetryManager.updateSamplingInterval(targetedTelemetryDelay)
+            RuntimeTelemetryManager.updateSamplingInterval(targetedTelemetryDelay)
         }
     }
 }
