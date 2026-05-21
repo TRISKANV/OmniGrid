@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.rememberNavController
@@ -43,22 +43,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OmniGridTheme {
-                // 1. ENVOLVEMOS LA APLICACIÓN EN EL COCKPIT OPERATIVO
-                // A partir de aquí, toda la app tiene acceso al LocalAdaptiveConfig (Estado de estrés, Blur, Animaciones).
-                OmniOSCockpit {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        // 2. CAMBIO CRÍTICO: Transparente para dejar ver el "Ambient Pulse" del Cockpit de fondo.
-                        // El Cockpit ya provee un fondo ultra oscuro (0xFF030303) por defecto.
-                        color = Color.Transparent
-                    ) {
-                        val navController = rememberNavController()
-                        
-                        OmniNavHost(
-                            navController = navController,
-                            payloadViewModel = payloadViewModel
-                        )
-                    }
+                // El Surface ahora envuelve directamente tu Host de navegación.
+                // Usamos el color de fondo del tema en lugar de transparente para evitar fallos de renderizado.
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val navController = rememberNavController()
+                    
+                    OmniNavHost(
+                        navController = navController,
+                        payloadViewModel = payloadViewModel
+                    )
                 }
             }
         }
