@@ -22,6 +22,8 @@ class RuntimeIntelligenceEngine(
     )
     val adaptationHint: StateFlow<RuntimeSignal.PerformanceHint> = _adaptationHint.asStateFlow()
 
+    private var lastThermalState: ThermalState = ThermalState.COOL
+
     fun initialize() {
         externalScope.launch {
             telemetryManager.telemetryState.collect { state ->
@@ -36,53 +38,71 @@ class RuntimeIntelligenceEngine(
         var targetedTelemetryDelay = 1000L
         var needsSimplifyRendering = false
 
-        // 1. Análisis del Perfil Térmico Real
+        // Monitoreo e informe de cambios en el estado térmico real
+        if (state.thermal != lastThermalState) {
+            CoreEventBus.publish(OmniEvent.ThermalStateChanged(lastThermalState, state.thermal))
+            lastThermalState = state.thermal
+        }
+
+        // 1. Análisis del Perfil Térmico Real e inyección al Journal Táctico
         when (state.thermal) {
             ThermalState.WARM -> {
                 needsReduceBlur = true
-                _signals.emit(RuntimeSignal.Warning("Elevación térmica de hardware. Degradando desenfoque.", RuntimeSignal.Warning.Level.LOW))
+                val msg = "Elevación térmica de hardware. Degradando desenfoque superficial."
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.LOW))
+                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             ThermalState.THROTTLING -> {
                 needsReduceBlur = true
                 needsReduceMotion = true
                 targetedTelemetryDelay = 2000L
-                _signals.emit(RuntimeSignal.Warning("Thermal Throttling detectado. Modulando ciclos de reloj internos.", RuntimeSignal.Warning.Level.HIGH))
+                val msg = "Thermal Throttling severo. Modulando ciclos de reloj internos."
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
+                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             ThermalState.CRITICAL -> {
                 needsReduceBlur = true
                 needsReduceMotion = true
                 targetedTelemetryDelay = 3000L
                 needsSimplifyRendering = true
-                _signals.emit(RuntimeSignal.Warning("Peligro térmico en procesador. Forzando UI minimalista.", RuntimeSignal.Warning.Level.CRITICAL))
+                val msg = "PELIGRO TÉRMICO EN PROCESADOR. Forzando modo UI minimalista."
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
+                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             else -> {}
         }
 
-        // 2. Análisis de Presión en la memoria RAM
+        // 2. Análisis de Presión en la memoria RAM Real
         when (state.ram.pressure) {
             MemoryPressure.HIGH -> {
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2000L)
-                _signals.emit(RuntimeSignal.Warning("Baja disponibilidad de RAM del sistema. Retrasando buffers secundarios.", RuntimeSignal.Warning.Level.MEDIUM))
+                val msg = "Baja disponibilidad de RAM del sistema. Retrasando buffers secundarios."
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.MEDIUM))
+                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             MemoryPressure.CRITICAL -> {
                 needsSimplifyRendering = true
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 4000L)
-                _signals.emit(RuntimeSignal.Warning("Advertencia severa de memoria (LowMemory. OOM inminente). Reduciendo hilos.", RuntimeSignal.Warning.Level.CRITICAL))
+                val msg = "Advertencia severa de memoria (LowMemory OS). OOM Inminente."
+                _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
+                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
             }
             else -> {}
         }
 
-        // 3. Estado Energético y Restricciones del Fabricante (Ahorro de batería)
+        // 3. Estado Energético Real (Ahorro de batería del dispositivo)
         if (state.battery.isPowerSaverMode) {
             needsReduceMotion = true
             needsReduceBlur = true
             targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2500L)
         }
 
-        // 4. Congestión Interna del Runtime Operativo
+        // 4. Congestión Interna del Runtime de la App
         if (state.runtime.eventBusQueueSize > 200 || state.runtime.avgPluginLatencyMs > 300L) {
             needsSimplifyRendering = true
-            _signals.emit(RuntimeSignal.Warning("Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos.", RuntimeSignal.Warning.Level.HIGH))
+            val msg = "Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos."
+            _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
+            CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
         }
 
         // Aplicación e inyección atómica de la directiva de adaptación si hay cambios del sistema
