@@ -1,105 +1,104 @@
 package com.tuapp.calculadora.ui.system
 
-import android.content.Context
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import com.tuapp.calculadora.ui.system.hal.MemoryProfile
-import com.tuapp.calculadora.ui.system.hal.OmniDeviceHAL
-import com.tuapp.calculadora.ui.system.hal.ThermalProfile
+import com.tuapp.calculadora.ui.system.model.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-enum class SystemStressLevel { NOMINAL, ELEVATED, SEVERE, CRITICAL }
+class RuntimeIntelligenceEngine(
+    private val telemetryManager: RuntimeTelemetryManager,
+    private val externalScope: CoroutineScope
+) {
+    private val _signals = MutableSharedFlow<RuntimeSignal>(extraBufferCapacity = 64)
+    val signals: SharedFlow<RuntimeSignal> = _signals.asSharedFlow()
 
-data class AdaptiveUIConfig(
-    val blurRadius: Dp,
-    val animationScale: Float,
-    val ambientGlowOpacity: Float,
-    val enableHaptics: Boolean,
-    val renderComplexity: Int 
-)
+    private val _adaptationHint = MutableStateFlow(
+        RuntimeSignal.PerformanceHint(
+            reduceBlur = false,
+            reduceMotion = false,
+            throttleTelemetryMs = 1000L,
+            simplifyRendering = false
+        )
+    )
+    val adaptationHint: StateFlow<RuntimeSignal.PerformanceHint> = _adaptationHint.asStateFlow()
 
-val LocalAdaptiveConfig = compositionLocalOf { 
-    AdaptiveUIConfig(8.dp, 1.0f, 0.5f, true, 100) 
-}
-
-object RuntimeIntelligenceEngine {
-    private val _stressLevel = MutableStateFlow(SystemStressLevel.NOMINAL)
-    val stressLevel: StateFlow<SystemStressLevel> = _stressLevel.asStateFlow()
-
-    private val _adaptiveConfig = MutableStateFlow(AdaptiveUIConfig(8.dp, 1.0f, 0.5f, true, 100))
-    val adaptiveConfig: StateFlow<AdaptiveUIConfig> = _adaptiveConfig.asStateFlow()
-
-    private val _anomalies = MutableStateFlow<List<String>>(emptyList())
-    val anomalies: StateFlow<List<String>> = _anomalies.asStateFlow()
-
-    private var engineJob: Job? = null
-
-    fun bootEngine(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
-        if (engineJob != null) return
-        
-        // Sincronizamos el contexto de la aplicación hacia el HAL de forma segura
-        OmniDeviceHAL.appContext = context.applicationContext
-        
-        RuntimeTelemetryManager.log("ENGINE", "Living Runtime Booting: Hardware bindings established", LogLevel.INFO)
-        
-        engineJob = scope.launch {
-            while (isActive) {
-                val thermal = OmniDeviceHAL.getThermalProfile(context)
-                val memory = OmniDeviceHAL.getMemoryProfile(context)
-                analyzeSystemCycle(thermal, memory)
-                delay(5000) 
+    fun initialize() {
+        externalScope.launch {
+            telemetryManager.telemetryState.collect { state ->
+                analyzeMetrics(state)
             }
         }
     }
 
-    fun reportEventThroughput(throughput: Int) {
-        if (throughput > 500) {
-            RuntimeTelemetryManager.log("ENGINE", "High event throughput detected: $throughput ev/s", LogLevel.WARN)
-        }
-    }
+    private suspend fun analyzeMetrics(state: HardwareState) {
+        var needsReduceBlur = false
+        var needsReduceMotion = false
+        var targetedTelemetryDelay = 1000L
+        var needsSimplifyRendering = false
 
-    fun analyzeSystemCycle(thermal: ThermalProfile, memory: MemoryProfile) {
-        val oldStress = _stressLevel.value
-        
-        val newStress = when {
-            thermal.isThrottling || memory.pressurePercent > 85 || memory.isLowMemory -> SystemStressLevel.CRITICAL
-            thermal.cpuTempC > 38.0f || memory.pressurePercent > 75 -> SystemStressLevel.SEVERE
-            thermal.cpuTempC > 35.0f || memory.pressurePercent > 65 -> SystemStressLevel.ELEVATED
-            else -> SystemStressLevel.NOMINAL
+        // 1. Análisis del Perfil Térmico Real
+        when (state.thermal) {
+            ThermalState.WARM -> {
+                needsReduceBlur = true
+                _signals.emit(RuntimeSignal.Warning("Elevación térmica de hardware. Degradando desenfoque.", RuntimeSignal.Warning.Level.LOW))
+            }
+            ThermalState.THROTTLING -> {
+                needsReduceBlur = true
+                needsReduceMotion = true
+                targetedTelemetryDelay = 2000L
+                _signals.emit(RuntimeSignal.Warning("Thermal Throttling detectado. Modulando ciclos de reloj internos.", RuntimeSignal.Warning.Level.HIGH))
+            }
+            ThermalState.CRITICAL -> {
+                needsReduceBlur = true
+                needsReduceMotion = true
+                targetedTelemetryDelay = 3000L
+                needsSimplifyRendering = true
+                _signals.emit(RuntimeSignal.Warning("Peligro térmico en procesador. Forzando UI minimalista.", RuntimeSignal.Warning.Level.CRITICAL))
+            }
+            else -> {}
         }
 
-        val logLvl = if (newStress == SystemStressLevel.NOMINAL) LogLevel.INFO else LogLevel.WARN
-        RuntimeTelemetryManager.log(
-            "HAL_POLL",
-            "RAM: ${memory.availableMB}MB free (${memory.pressurePercent}% loaded) | Temp: ${thermal.cpuTempC}°C | Bat: ${thermal.batteryLevel}%",
-            logLvl
-        )
-
-        if (oldStress != newStress) {
-            _stressLevel.value = newStress
-            CoreEventBus.publish(OmniEvent.SystemStressChanged(oldStress, newStress))
-            RuntimeTelemetryManager.log("INTELLIGENCE", "System stress shifted: ${oldStress.name} -> ${newStress.name}", if (newStress == SystemStressLevel.CRITICAL) LogLevel.CRITICAL else LogLevel.WARN)
-            recalculateAdaptiveConfig(newStress)
+        // 2. Análisis de Presión en la memoria RAM
+        when (state.ram.pressure) {
+            MemoryPressure.HIGH -> {
+                targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2000L)
+                _signals.emit(RuntimeSignal.Warning("Baja disponibilidad de RAM del sistema. Retrasando buffers secundarios.", RuntimeSignal.Warning.Level.MEDIUM))
+            }
+            MemoryPressure.CRITICAL -> {
+                needsSimplifyRendering = true
+                targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 4000L)
+                _signals.emit(RuntimeSignal.Warning("Advertencia severa de memoria (LowMemory. OOM inminente). Reduciendo hilos.", RuntimeSignal.Warning.Level.CRITICAL))
+            }
+            else -> {}
         }
-    }
 
-    private fun recalculateAdaptiveConfig(stress: SystemStressLevel) {
-        val config = when (stress) {
-            SystemStressLevel.NOMINAL -> AdaptiveUIConfig(12.dp, 1.0f, 0.6f, true, 100)
-            SystemStressLevel.ELEVATED -> AdaptiveUIConfig(6.dp, 0.8f, 0.4f, true, 80)
-            SystemStressLevel.SEVERE -> AdaptiveUIConfig(0.dp, 0.5f, 0.1f, false, 50)
-            SystemStressLevel.CRITICAL -> AdaptiveUIConfig(0.dp, 0.0f, 0.0f, false, 20)
+        // 3. Estado Energético y Restricciones del Fabricante (Ahorro de batería)
+        if (state.battery.isPowerSaverMode) {
+            needsReduceMotion = true
+            needsReduceBlur = true
+            targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2500L)
         }
-        _adaptiveConfig.update { config }
+
+        // 4. Congestión Interna del Runtime Operativo
+        if (state.runtime.eventBusQueueSize > 200 || state.runtime.avgPluginLatencyMs > 300L) {
+            needsSimplifyRendering = true
+            _signals.emit(RuntimeSignal.Warning("Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos.", RuntimeSignal.Warning.Level.HIGH))
+        }
+
+        // Aplicación e inyección atómica de la directiva de adaptación si hay cambios del sistema
+        val currentHint = _adaptationHint.value
+        if (currentHint.reduceBlur != needsReduceBlur ||
+            currentHint.reduceMotion != needsReduceMotion ||
+            currentHint.throttleTelemetryMs != targetedTelemetryDelay ||
+            currentHint.simplifyRendering != needsSimplifyRendering
+        ) {
+            _adaptationHint.value = RuntimeSignal.PerformanceHint(
+                reduceBlur = needsReduceBlur,
+                reduceMotion = needsReduceMotion,
+                throttleTelemetryMs = targetedTelemetryDelay,
+                simplifyRendering = needsSimplifyRendering
+            )
+            telemetryManager.updateSamplingInterval(targetedTelemetryDelay)
+        }
     }
 }
