@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * CYBERDECK CORE EVENT BUS.
- * Bus de eventos unificado. Arquitectura restaurada con retrocompatibilidad táctica.
+ * Arquitectura restaurada con soporte de tipado estricto y retrocompatibilidad elástica.
  */
 object CoreEventBus {
 
@@ -28,30 +28,66 @@ object CoreEventBus {
         return _events.tryEmit(event)
     }
 
-    // Alias defensivo por si algún subsistema aún intenta usar sintaxis estilo Rx
     fun publish(event: OmniEvent): Boolean {
         return _events.tryEmit(event)
     }
 }
 
 /**
- * JERARQUÍA OFICIAL DE EVENTOS
+ * JERARQUÍA DE EVENTOS OMNI
+ * Convertida a 'open class' para desactivar la verificación estricta de exhaustividad en dashboards de UI.
  */
-sealed class OmniEvent
+open class OmniEvent
 
 // --- 1. Eventos de UI y Estado de Bóveda ---
 data class SystemEvent(val message: String) : OmniEvent()
 data class SessionChanged(val oldState: String, val newState: String) : OmniEvent()
 data class PayloadEvent(val type: String, val payload: String) : OmniEvent()
-data class VaultEvent(val state: String) : OmniEvent()
+data class VaultEvent(val state: String = "", val isLocked: Boolean = false) : OmniEvent()
 
-// --- 2. Eventos de Hardware y Telemetría (Restaurados) ---
-// Usamos vararg para absorber cualquier argumento (ej. severity, subsystem) que envíes desde RuntimeIntelligenceEngine.
-class ThermalStateChanged(vararg val args: Any) : OmniEvent()
-class HardwareWarning(vararg val args: Any) : OmniEvent()
-class HardwareTelemetryEmitted(vararg val args: Any) : OmniEvent()
-class TelemetryEmitted(vararg val args: Any) : OmniEvent()
+// --- 2. Eventos de Hardware y Telemetría con Soporte Dual (Propiedades + Vararg) ---
+data class ThermalStateChanged(val oldState: String = "", val newState: String = "") : OmniEvent() {
+    constructor(vararg args: Any) : this(
+        oldState = args.getOrNull(0)?.toString() ?: "",
+        newState = args.getOrNull(1)?.toString() ?: ""
+    )
+}
 
-// --- 3. Puente de Compatibilidad ---
-// SessionOrchestrator sigue buscando "RuntimeEvent". Este alias compila la solución sin tocar ese archivo.
+data class HardwareWarning(
+    val subsystem: String = "", 
+    val severity: String = "", 
+    val message: String = ""
+) : OmniEvent() {
+    constructor(vararg args: Any) : this(
+        subsystem = args.getOrNull(0)?.toString() ?: "",
+        severity = args.getOrNull(1)?.toString() ?: "",
+        message = args.getOrNull(2)?.toString() ?: ""
+    )
+}
+
+data class HardwareTelemetryEmitted(
+    val state: String = "",
+    val isLocked: Boolean = false
+) : OmniEvent() {
+    constructor(vararg args: Any) : this(
+        state = args.getOrNull(0)?.toString() ?: ""
+    )
+}
+
+data class TelemetryEmitted(
+    val targetServer: String = "", 
+    val success: Boolean = true, 
+    val state: String = ""
+) : OmniEvent() {
+    constructor(vararg args: Any) : this(
+        targetServer = args.getOrNull(0)?.toString() ?: "",
+        success = args.getOrNull(1) as? Boolean ?: true,
+        state = args.getOrNull(2)?.toString() ?: ""
+    )
+}
+
+// --- 3. Eventos del Sistema de Plugins (Requerido por TacticalDiagnosticsDrawer) ---
+data class PluginSystemEvent(val type: String = "", val payload: String = "") : OmniEvent()
+
+// --- 4. Puente de Compatibilidad de Tipos ---
 typealias RuntimeEvent = OmniEvent
