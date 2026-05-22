@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tuapp.calculadora.core.system.CoreEventBus
 import com.tuapp.calculadora.ui.system.SessionOrchestrator
 import kotlinx.coroutines.flow.collectLatest
 import java.text.SimpleDateFormat
