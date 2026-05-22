@@ -80,7 +80,8 @@ object RuntimePluginManager {
     }
 
     private suspend fun startHealthMonitor() {
-        while (isActive) {
+        // CORRECCIÓN: Usamos explícitamente el orchestratorScope para validar si sigue activo
+        while (orchestratorScope.isActive) {
             delay(5000L) // Scan de salud cada 5 segundos
             updateActivePluginsUI()
         }
