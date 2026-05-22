@@ -1,7 +1,6 @@
 package com.tuapp.calculadora.ui.system.plugin
 
-import com.tuapp.calculadora.core.CoreEventBus
-import com.tuapp.calculadora.core.OmniEvent
+import com.tuapp.calculadora.core.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -111,11 +110,9 @@ class SecureVaultPlugin : OmniPlugin {
                     )
 
                     if (!isDegraded || Random.nextFloat() > 0.7f) {
-                        CoreEventBus.emit(SystemEvent("VAULT_IO_METRICS", mapOf(
-                            "throughput" to simulatedThroughput,
-                            "latency" to simulatedLatency,
-                            "allocated_bytes" to _metrics.value.storageUsedBytes
-                        )))
+                        // Reformateado a un solo String para respetar la firma de SystemEvent(message: String)
+                        val metricsLog = "VAULT_IO_METRICS | Throughput: ${String.format("%.2f", simulatedThroughput)}MB/s | Latency: ${simulatedLatency}ms | Allocated: ${_metrics.value.storageUsedBytes}B"
+                        CoreEventBus.emit(SystemEvent(metricsLog))
                     }
                 }
                 delay(_adaptiveRefreshRateMs.value)
@@ -167,7 +164,8 @@ class SecureVaultPlugin : OmniPlugin {
     }
 
     private fun logRuntimeEvent(type: String, description: String) {
-        CoreEventBus.tryEmitEvent(SystemEvent(...)) 
+        // Corrección de sintaxis: combinamos tipo y descripción en un String limpio
+        CoreEventBus.tryEmitEvent(SystemEvent("[$type] $description"))
     }
 }
 
