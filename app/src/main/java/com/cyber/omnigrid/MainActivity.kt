@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.tuapp.calculadora.core.system.CoreEventBus
 import com.tuapp.calculadora.ui.dashboard.ModularDashboard
 import com.tuapp.calculadora.ui.system.SessionOrchestrator
 import kotlinx.coroutines.CoroutineScope
