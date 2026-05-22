@@ -1,5 +1,7 @@
 package com.tuapp.calculadora.ui.system.plugin
 
+import com.tuapp.calculadora.core.CoreEventBus
+import com.tuapp.calculadora.core.OmniEvent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
