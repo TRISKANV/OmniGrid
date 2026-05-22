@@ -1,4 +1,4 @@
-package com.tuapp.calculadora.core.system
+package com.tuapp.calculadora.ui.system
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,7 +34,7 @@ object CoreEventBus {
     /**
      * Emite un evento en tiempo real hacia todos los subsistemas o pantallas suscritas.
      */
-    async fun emitEvent(event: RuntimeEvent) {
+    suspend fun emitEvent(event: RuntimeEvent) {
         _events.emit(event)
     }
 
