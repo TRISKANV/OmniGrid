@@ -1,6 +1,7 @@
 package com.tuapp.calculadora.ui.system
 
-import com.tuapp.calculadora.core.system.CoreEventBus
+import com.tuapp.calculadora.core.CoreEventBus
+import com.tuapp.calculadora.core.OmniEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
