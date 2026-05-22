@@ -1,88 +1,38 @@
-package com.tuapp.calculadora // Revisa si tu ruta física real es com.cyber.omnigrid
+package com.tuapp.calculadora
 
-import com.tuapp.calculadora.core.*
 import android.os.Bundle
-import android.view.WindowInsets
-import android.view.WindowInsetsController
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.core.view.WindowCompat
+import com.tuapp.calculadora.core.plugin.RuntimePluginManager
+import com.tuapp.calculadora.core.plugin.TelemetryPlugin
+import com.tuapp.calculadora.ui.dashboard.DiagnosticsPlugin
 import com.tuapp.calculadora.ui.dashboard.ModularDashboard
 import com.tuapp.calculadora.ui.system.SessionOrchestrator
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
-/**
- * OmniGrid Main Runtime Bootloader.
- * Configura el entorno de hardware inmersivo táctico y arranca de manera
- * directa el ModularDashboard sin pasar por ninguna fachada o PIN de desbloqueo.
- */
 class MainActivity : ComponentActivity() {
-
-    private val activityScope = CoroutineScope(Dispatchers.Main)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Configuración Inmersiva de la Ventana para la identidad Cyberdeck (OLED-First)
-        window.attributes.layoutInDisplayCutoutMode = 
-            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        )
+        // 1. Inmersión Total (OLED-First Cyberdeck)
+        // Permite que la UI ocupe la pantalla completa, ignorando la barra de estado y navegación.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        hideSystemUI()
-
-        // Inicializar de inmediato la sesión operativa real del Runtime
+        // 2. Levantar la identidad de sesión del operador de forma segura
         SessionOrchestrator.bootstrapSession()
 
-        // Notificar al Bus de Eventos Central que el hardware del Cyberdeck está en línea
-        activityScope.launch {
-            // CORRECCIÓN TÁCTICA: Disparo directo del SystemEvent limpio sin anidación
-            CoreEventBus.emitEvent(SystemEvent(message = "SYSTEM BOOTSTRAPPED: ${System.currentTimeMillis()}"))
-        }
+        // 3. Registrar los Plugins Reales en el Kernel
+        // El orden de registro no importa, el Kernel los ordenará por la `priority` de sus Manifiestos.
+        RuntimePluginManager.registerPlugin(TelemetryPlugin(applicationContext))
+        RuntimePluginManager.registerPlugin(DiagnosticsPlugin())
 
+        // 4. Boot Ecosystem (Ignition)
+        // Levanta hilos de aislamiento, resuelve dependencias e inicia el Health Monitor.
+        RuntimePluginManager.bootEcosystem()
+
+        // 5. Entregar el control visual al Dashboard Dinámico
         setContent {
-            // Estilo visual Premium: Fondo negro puro absoluto para ahorro energético de píxeles
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color(0xFF000000) 
-            ) {
-                // El Dashboard Modular toma el control como Home oficial del Runtime OS
-                ModularDashboard(
-                    onExitRuntime = {
-                        finishAffinity()
-                    }
-                )
-            }
-        }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
-        }
-    }
-
-    /**
-     * Fuerza al sistema operativo Android a ocultar barras tradicionales de navegación
-     * para asegurar una experiencia táctica de consola viva y limpia.
-     */
-    private fun hideSystemUI() {
-        val decorView = window.decorView
-        val controller = decorView.windowInsetsController
-        if (controller != null) {
-            controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-            controller.systemBarsBehavior = 
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            ModularDashboard()
         }
     }
 }
