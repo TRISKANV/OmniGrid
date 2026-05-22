@@ -50,12 +50,15 @@ fun ModularDashboard(
         // Escucha directa del tejido de eventos reales del sistema operativo
         CoreEventBus.events.collectLatest { event ->
             val logMessage = when (event) {
-                is CoreEventBus.RuntimeEvent.SystemBootstrapped -> "SYS // HARDWARE COCKPIT BOOTSTRAPPED"
-                is CoreEventBus.RuntimeEvent.SessionChanged -> "AUTH // CORE SESSION STATE UPDATED TO: ${event.state}"
-                is CoreEventBus.RuntimeEvent.TelemetryHeartbeat -> "TELEMETRY // RUNTIME SYSTEM PING"
-                is CoreEventBus.RuntimeEvent.SecureVaultLockChanged -> "VAULT // CRYPTO VAULT STATE INVERSION: Locked=${event.isLocked}"
-                is CoreEventBus.RuntimeEvent.PayloadDispatched -> "PAYLOAD // ENQUEUED PAYLOAD DEPLOYED TO ${event.targetServer} [SUCCESS=${event.success}]"
-                is CoreEventBus.RuntimeEvent.HardwareAnomalyDetected -> "ALERT // ANOMALY INSIDE ${event.subsystem.uppercase()} SEVERITY: ${event.severity}"
+                is SystemEvent -> "SYS // ${event.message.ifEmpty { "HARDWARE COCKPIT BOOTSTRAPPED" }}"
+                is SessionChanged -> "AUTH // CORE SESSION STATE UPDATED TO: ${event.newState}"
+                is VaultEvent -> "VAULT // CRYPTO VAULT STATE INVERSION: Locked=${event.isLocked}"
+                is TelemetryEmitted -> "PAYLOAD // DEPLOYED TO ${event.targetServer} [SUCCESS=${event.success}] STATE: ${event.state}"
+                is PayloadEvent -> "PAYLOAD // ENQUEUED DEPLOYMENT: ${event.type} -> ${event.payload}"
+                is HardwareWarning -> "ALERT // ANOMALY INSIDE ${event.subsystem.uppercase()} SEVERITY: ${event.severity}"
+                is HardwareTelemetryEmitted -> "HARDWARE // SENSOR STATE: ${event.state}"
+                is ThermalStateChanged -> "THERMAL // CORE TEMPERATURE CHANGED: ${event.oldState} -> ${event.newState}"
+                else -> "SYS // UNMAPPED RUNTIME EVENT RECEIVED"
             }
             systemLogs.add(0, "[${timeFormatter.format(Date())}] $logMessage")
         }
@@ -179,7 +182,7 @@ fun ModularDashboard(
                     onClick = {
                         // Simular inyección de evento real de telemetría a través del bus para testing operativo
                         CoreEventBus.tryEmitEvent(
-                            CoreEventBus.RuntimeEvent.TelemetryHeartbeat(System.currentTimeMillis())
+                            SystemEvent(message = "RUNTIME SYSTEM PING")
                         )
                         SessionOrchestrator.tick()
                     },
@@ -200,10 +203,10 @@ fun ModularDashboard(
                     onClick = {
                         // Disparar simulación de Payload asíncrono para verificar reactividad del bus centralizado
                         CoreEventBus.tryEmitEvent(
-                            CoreEventBus.RuntimeEvent.PayloadDispatched(
-                                payloadId = "PL-99X",
+                            TelemetryEmitted(
                                 targetServer = "srv-hub-alpha",
-                                success = true
+                                success = true,
+                                state = "PL-99X"
                             )
                         )
                     },
