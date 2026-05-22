@@ -1,50 +1,47 @@
-package com.tuapp.calculadora.ui.system
+package com.tuapp.calculadora.core.system
 
-import com.tuapp.calculadora.ui.system.model.HardwareState
-import com.tuapp.calculadora.ui.system.model.ThermalState
-import com.tuapp.calculadora.ui.system.model.SystemStressLevel
-import com.tuapp.calculadora.ui.system.model.TelemetryEntry
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-// ==========================================================================
-// EVENTOS NATIVOS DEL SISTEMA OPERATIVO
-// ==========================================================================
-sealed class OmniEvent {
-    // --- EVENTOS NUEVOS (Fase Real Hardware) ---
-    data class HardwareTelemetryEmitted(val state: HardwareState) : OmniEvent()
-    data class ThermalStateChanged(val oldState: ThermalState, val newState: ThermalState) : OmniEvent()
-    data class HardwareWarning(val message: String) : OmniEvent()
-    
-    // --- EVENTOS LEGACY (Para retrocompatibilidad de la UI) ---
-    data class TelemetryEmitted(val entry: TelemetryEntry) : OmniEvent()
-    data class SystemStressChanged(val oldLevel: SystemStressLevel, val newLevel: SystemStressLevel) : OmniEvent()
-    
-    // --- EVENTOS DE PLUGINS ---
-    data class PluginStateChanged(val pluginId: String, val isActive: Boolean) : OmniEvent()
-    data class PluginSystemEvent(val type: String, val payload: Map<String, Any>) : OmniEvent()
-}
-
-// ==========================================================================
-// EVENTOS DE PLUGINS MODULARES
-// ==========================================================================
-data class SystemEvent(
-    val type: String,
-    val payload: Map<String, Any> = emptyMap()
-)
-
-// ==========================================================================
-// CORE EVENT BUS
-// ==========================================================================
+/**
+ * CYBERDECK CORE EVENT BUS.
+ * Bus de eventos unificado de alta velocidad y concurrente para OmniGrid.
+ * Actúa como el sistema nervioso del Runtime OS, permitiendo la comunicación reactiva real 
+ * entre SecureVault, Cargas útiles, Telemetría e Interfaz Gráfica sin acoplamiento rígido.
+ */
 object CoreEventBus {
-    private val _events = MutableSharedFlow<OmniEvent>(extraBufferCapacity = 128)
-    val events = _events.asSharedFlow()
 
-    fun publish(event: OmniEvent) {
-        _events.tryEmit(event)
+    /**
+     * Jerarquía de Eventos Reales que ocurren dentro de la plataforma táctica.
+     */
+    sealed class RuntimeEvent {
+        data class SystemBootstrapped(val timestamp: Long) : RuntimeEvent()
+        data class SessionChanged(val sessionId: String, val state: String) : RuntimeEvent()
+        data class TelemetryHeartbeat(val timestamp: Long) : RuntimeEvent()
+        data class SecureVaultLockChanged(val isLocked: Boolean) : RuntimeEvent()
+        data class PayloadDispatched(val payloadId: String, val targetServer: String, val success: Boolean) : RuntimeEvent()
+        data class HardwareAnomalyDetected(val subsystem: String, val severity: String) : RuntimeEvent()
     }
 
-    fun emit(event: SystemEvent) {
-        _events.tryEmit(OmniEvent.PluginSystemEvent(event.type, event.payload))
+    // Flujo caliente (SharedFlow) configurado para soportar ráfagas asíncronas sin retención obsoleta
+    private val _events = MutableSharedFlow<RuntimeEvent>(
+        replay = 0, 
+        extraBufferCapacity = 64
+    )
+    val events: SharedFlow<RuntimeEvent> = _events.asSharedFlow()
+
+    /**
+     * Emite un evento en tiempo real hacia todos los subsistemas o pantallas suscritas.
+     */
+    async fun emitEvent(event: RuntimeEvent) {
+        _events.emit(event)
+    }
+
+    /**
+     * Emite un evento de manera síncrona/inmediata desde contextos donde no es posible usar suspend.
+     */
+    fun tryEmitEvent(event: RuntimeEvent): Boolean {
+        return _events.tryEmit(event)
     }
 }
