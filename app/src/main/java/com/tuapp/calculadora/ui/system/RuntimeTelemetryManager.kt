@@ -1,5 +1,7 @@
 package com.tuapp.calculadora.ui.system
 
+import com.tuapp.calculadora.core.CoreEventBus
+import com.tuapp.calculadora.core.OmniEvent
 import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
