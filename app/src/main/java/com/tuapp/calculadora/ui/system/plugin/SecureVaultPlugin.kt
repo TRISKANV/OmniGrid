@@ -167,7 +167,7 @@ class SecureVaultPlugin : OmniPlugin {
     }
 
     private fun logRuntimeEvent(type: String, description: String) {
-        CoreEventBus.emit(SystemEvent(type, mapOf("description" to description, "origin" to manifest.pluginId)))
+        CoreEventBus.tryEmitEvent(SystemEvent(...)) 
     }
 }
 
