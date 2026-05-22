@@ -1,8 +1,6 @@
 package com.tuapp.calculadora.ui.system
 
 import com.tuapp.calculadora.core.*
-import com.tuapp.calculadora.core.CoreEventBus
-import com.tuapp.calculadora.core.OmniEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,9 +75,9 @@ object SessionOrchestrator {
         _currentManifest.value = newManifest
         _sessionState.value = MockSessionStatus.ACTIVE
 
-        // Propagar el evento real a través del bus del sistema
+        // CORRECCIÓN: Uso de parámetros explícitos planos pasados directamente al SessionChanged global
         orchestratorScope.launch {
-            CoreEventBus.emitEvent(CoreEventBus.RuntimeEvent.SessionChanged(uniqueSessionId, "ACTIVE"))
+            CoreEventBus.emitEvent(SessionChanged(oldState = uniqueSessionId, newState = "ACTIVE"))
         }
     }
 
@@ -98,8 +96,9 @@ object SessionOrchestrator {
         _sessionState.value = MockSessionStatus.TERMINATED
         _currentManifest.value = null
         
+        // CORRECCIÓN: Parámetros corregidos para la firma de SessionChanged
         orchestratorScope.launch {
-            CoreEventBus.emitEvent(CoreEventBus.RuntimeEvent.SessionChanged(pastId, "TERMINATED"))
+            CoreEventBus.emitEvent(SessionChanged(oldState = pastId, newState = "TERMINATED"))
         }
     }
 
@@ -121,7 +120,8 @@ object SessionOrchestrator {
     fun tick() {
         if (isSessionActive) {
             orchestratorScope.launch {
-                CoreEventBus.emitEvent(CoreEventBus.RuntimeEvent.TelemetryHeartbeat(System.currentTimeMillis()))
+                // CORRECCIÓN: TelemetryHeartbeat obsoleto mapeado limpiamente al SystemEvent genérico
+                CoreEventBus.emitEvent(SystemEvent(message = "TELEMETRY_HEARTBEAT"))
             }
         }
     }
