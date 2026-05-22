@@ -1,14 +1,15 @@
 package com.tuapp.calculadora.ui.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.staggeredgrid.*
-import androidx.compose.foundation.lazy.staggeredgrid.items 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -16,192 +17,228 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tuapp.calculadora.ui.system.*
-import com.tuapp.calculadora.ui.system.RuntimeIntelligenceEngine
-import com.tuapp.calculadora.ui.system.plugin.SecureVaultPlugin
-import com.tuapp.calculadora.ui.system.sdk.*
-import kotlinx.coroutines.delay
+import com.tuapp.calculadora.core.system.CoreEventBus
 import com.tuapp.calculadora.ui.system.SessionOrchestrator
+import kotlinx.coroutines.flow.collectLatest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-// ==========================================================================
-// MOCK PLUGIN (Ejemplo nativo de la nueva arquitectura OmniPlugin)
-// ==========================================================================
-class CoreTelemetryPlugin : OmniPlugin {
-    override val manifest = PluginManifest(
-        pluginId = "core.telemetry.01",
-        displayName = "CORE TELEMETRY",
-        version = "2.0.0",
-        description = "Provides real-time HAL observability",
-        category = PluginCategory.TELEMETRY,
-        providedCapabilities = setOf(SystemCapability.HARDWARE_TELEMETRY),
-        consumedCapabilities = emptySet(),
-        requiredPermissions = emptyList(),
-        visualPriority = 1, // Desplazado para dar prioridad visual de ancho completo al Vault
-        supportsHeadlessExecution = true,
-        transportCompatibility = listOf("LOCAL")
-    )
-
-    override val widgetProvider = object : PluginWidgetProvider {
-        @Composable
-        override fun Render(modifier: Modifier) {
-            Column(modifier = modifier.padding(8.dp)) {
-                Text("HAL DATA STREAM ONLINE", color = Color(0xFF00FF66), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("V 2.0.0 // NOMINAL", color = Color.Gray, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-            }
-        }
-        override fun onWidgetVisible() {}
-        override fun onWidgetHidden() {}
-    }
-
-    override fun onInstall() {}
-    override fun onBoot() {}
-    override fun onSuspend() {}
-    override fun onDestroy() {}
-    override fun executeAction(actionId: String, payload: Map<String, Any>) = Result.success(Unit)
-    override fun getHealthStatus() = "NOMINAL"
-}
-
-// ==========================================================================
-// COMPOSITOR DEL ECOSISTEMA (DASHBOARD)
-// ==========================================================================
+/**
+ * MODULAR CYBERDECK DASHBOARD (HOME REAL).
+ * Pantalla principal de OmniGrid. Consume telemetría pura, se conecta al bus de eventos central
+ * y ofrece un panel de mandos premium táctico y minimalista en formato OLED-First.
+ */
 @Composable
-fun ModularDashboardScreen() {
-    val anomalies by RuntimeIntelligenceEngine.anomalies.collectAsState()
+fun ModularDashboard(
+    onExitRuntime: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val activeSessionId = SessionOrchestrator.sessionId
+    val currentOperator = SessionOrchestrator.name
     
-    // Inyección de dependencias dinámica mediante instanciación de Plugins Nativos
-    val loadedPlugins = remember {
-        listOf(
-            SecureVaultPlugin().apply { 
-                // Inicializar estado criptográfico simulando un primer desbloqueo de arranque seguro
-                executeAction("ACTION_UNLOCK", emptyMap())
-            },
-            CoreTelemetryPlugin()
-        ).sortedBy { it.manifest.visualPriority }
-    }
+    // Captura reactiva de eventos del Bus de manera aislada para optimizar recomposiciones
+    val systemLogs = remember { mutableStateListOf<String>() }
+    
+    // Formateador de tiempo táctico de consola viva
+    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
 
     LaunchedEffect(Unit) {
-        SessionOrchestrator.bootstrapSession()
-        loadedPlugins.forEach { it.onBoot() }
+        systemLogs.add("[${timeFormatter.format(Date())}] SYS // CORE SYSTEM ONLINE")
+        systemLogs.add("[${timeFormatter.format(Date())}] AUTH // SESSION VERIFIED: $activeSessionId")
         
-        while (true) {
-            SessionOrchestrator.tick()
-            delay(1000) // 1Hz Tick Rate del OS
+        // Escucha directa del tejido de eventos reales del sistema operativo
+        CoreEventBus.events.collectLatest { event ->
+            val logMessage = when (event) {
+                is CoreEventBus.RuntimeEvent.SystemBootstrapped -> "SYS // HARDWARE COCKPIT BOOTSTRAPPED"
+                is CoreEventBus.RuntimeEvent.SessionChanged -> "AUTH // CORE SESSION STATE UPDATED TO: ${event.state}"
+                is CoreEventBus.RuntimeEvent.TelemetryHeartbeat -> "TELEMETRY // RUNTIME SYSTEM PING"
+                is CoreEventBus.RuntimeEvent.SecureVaultLockChanged -> "VAULT // CRYPTO VAULT STATE INVERSION: Locked=${event.isLocked}"
+                is CoreEventBus.RuntimeEvent.PayloadDispatched -> "PAYLOAD // ENQUEUED PAYLOAD DEPLOYED TO ${event.targetServer} [SUCCESS=${event.success}]"
+                is CoreEventBus.RuntimeEvent.HardwareAnomalyDetected -> "ALERT // ANOMALY INSIDE ${event.subsystem.uppercase()} SEVERITY: ${event.severity}"
+            }
+            systemLogs.add(0, "[${timeFormatter.format(Date())}] $logMessage")
         }
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color(0xFF000000)) // True Black OLED Background
+            .padding(top = 40.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             
-            // --- TOP HUD: INTELLIGENCE & SESSION LAYER ---
+            // --- HEADER DE CONSOLA TÁCTICA ---
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp, start = 16.dp, end = 16.dp, bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
                     Text(
-                        text = "OMNI_OS // V2.0",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-0.5).sp
+                        text = "OMNIGRID // RUNTIME OS",
+                        color = Color(0xFF00F0FF), // Cyber Cyan Neon Accent
+                        fontSize = 18.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
                     )
-                    val session = SessionOrchestrator.getSessionManifest()
                     Text(
-                        text = "SESSION: ${session?.sessionId ?: "BOOTING"} | ${session?.status?.name ?: "N/A"}",
-                        color = Color(0xFF00E5FF),
+                        text = "OPERATOR: $currentOperator // SRC: REAL_HARDWARE",
+                        color = Color(0xFF64748B),
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
+                        letterSpacing = 1.sp
                     )
                 }
-
+                
+                // Indicador de Estado de Sesión en Vivo
                 Box(
                     modifier = Modifier
-                        .border(1.dp, if(anomalies.isEmpty()) Color(0xFF00FF66) else Color(0xFFFF3333), RoundedCornerShape(4.dp))
-                        .background(if(anomalies.isEmpty()) Color(0xFF00FF66).copy(alpha = 0.1f) else Color(0xFFFF3333).copy(alpha = 0.1f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .background(Color(0xFF091A1E), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if(anomalies.isEmpty()) "AI: NOMINAL" else "AI: ANOMALY",
-                        color = if(anomalies.isEmpty()) Color(0xFF00FF66) else Color(0xFFFF3333),
-                        fontSize = 10.sp,
+                        text = "SYS_ACTIVE",
+                        color = Color(0xFF22C55E), // Matrix Green
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // --- GRID DE PLUGINS DINÁMICO ---
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalItemSpacing = 12.dp,
-                modifier = Modifier.fillMaxSize()
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- PANEL DE METADATOS SEGUROS ---
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF050B14))
+                    .padding(12.dp)
             ) {
-                // FIX: El span se define a nivel del DSL items() en lugar del Modifier para soportar KAPT limpio
-                items(
-                    items = loadedPlugins,
-                    key = { it.manifest.pluginId },
-                    span = { plugin ->
-                        if (plugin.manifest.visualPriority == 0) {
-                            StaggeredGridItemSpan.FullLine
-                        } else {
-                            StaggeredGridItemSpan.SingleLane
-                        }
-                    }
-                ) { plugin ->
-                    PluginContainer(plugin = plugin)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PluginContainer(plugin: OmniPlugin) {
-    // Si ocupa todo el ancho adaptamos el aspecto
-    val isWide = plugin.manifest.visualPriority == 0
-    val modifier = if (isWide) Modifier.fillMaxWidth() else Modifier.aspectRatio(1f)
-
-    Box(
-        modifier = modifier
-            .background(Color(0xFF111111), RoundedCornerShape(12.dp))
-            .border(1.dp, Color(0xFF222222), RoundedCornerShape(12.dp))
-            .padding(14.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = plugin.manifest.displayName,
-                    color = Color.Gray,
-                    fontSize = 10.sp,
-                    letterSpacing = 1.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                
-                Text(
-                    text = "HEALTH: ${plugin.getHealthStatus()}",
-                    color = when(plugin.getHealthStatus()) {
-                        "NOMINAL" -> Color(0xFF00FF66).copy(alpha = 0.7f)
-                        "DEGRADED" -> Color(0xFFFFB300).copy(alpha = 0.7f)
-                        else -> Color(0xFFFF3333).copy(alpha = 0.7f)
-                    },
-                    fontSize = 8.sp,
+                    text = "ID DE SESIÓN ÚNICA: $activeSessionId",
+                    color = Color(0xFFE2E8F0),
+                    fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
+                Text(
+                    text = "PERSISTENCIA DEL RUNTIME: COHERENTE // SECUREVAULT: READY",
+                    color = Color(0xFF818CF8),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            plugin.widgetProvider?.Render(modifier = Modifier.fillMaxSize())
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- LOG FEED EN TIEMPO REAL (CONSOLA VIVA) ---
+            Text(
+                text = "OPERATIONAL SYSTEM FEED:",
+                color = Color(0xFF475569),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(Color(0xFF020617))
+                    .padding(8.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(systemLogs) { log ->
+                        Text(
+                            text = log,
+                            color = if (log.contains("ALERT")) Color(0xFFEF4444) else Color(0xFF94A3B8),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- CONTROL INTERACTIVO DE PLATAFORMA ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        // Simular inyección de evento real de telemetría a través del bus para testing operativo
+                        CoreEventBus.tryEmitEvent(
+                            CoreEventBus.RuntimeEvent.TelemetryHeartbeat(System.currentTimeMillis())
+                        )
+                        SessionOrchestrator.tick()
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                ) {
+                    Text(
+                        text = "EMIT_PING",
+                        color = Color(0xFF00F0FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        // Disparar simulación de Payload asíncrono para verificar reactividad del bus centralizado
+                        CoreEventBus.tryEmitEvent(
+                            CoreEventBus.RuntimeEvent.PayloadDispatched(
+                                payloadId = "PL-99X",
+                                targetServer = "srv-hub-alpha",
+                                success = true
+                            )
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                ) {
+                    Text(
+                        text = "TEST_PAYLOAD",
+                        color = Color(0xFF818CF8),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        SessionOrchestrator.clearSession()
+                        onExitRuntime()
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1517)),
+                    border = BorderStroke(1.dp, Color(0xFF991B1B))
+                ) {
+                    Text(
+                        text = "KILL_OS",
+                        color = Color(0xFFEF4444),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
