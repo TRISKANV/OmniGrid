@@ -1,4 +1,4 @@
-package com.tuapp.calculadora.ui.system
+package com.tuapp.calculadora.core
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -6,42 +6,54 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * CYBERDECK CORE EVENT BUS.
- * Bus de eventos unificado de alta velocidad y concurrente para OmniGrid.
- * Actúa como el sistema nervioso del Runtime OS, permitiendo la comunicación reactiva real 
- * entre SecureVault, Cargas útiles, Telemetría e Interfaz Gráfica sin acoplamiento rígido.
+ * Bus de eventos unificado de alta velocidad para OmniGrid.
+ * Restablecido al paquete .core para resolver la integridad de las importaciones.
  */
 object CoreEventBus {
 
-    /**
-     * Jerarquía de Eventos Reales que ocurren dentro de la plataforma táctica.
-     */
-    sealed class RuntimeEvent {
-        data class SystemBootstrapped(val timestamp: Long) : RuntimeEvent()
-        data class SessionChanged(val sessionId: String, val state: String) : RuntimeEvent()
-        data class TelemetryHeartbeat(val timestamp: Long) : RuntimeEvent()
-        data class SecureVaultLockChanged(val isLocked: Boolean) : RuntimeEvent()
-        data class PayloadDispatched(val payloadId: String, val targetServer: String, val success: Boolean) : RuntimeEvent()
-        data class HardwareAnomalyDetected(val subsystem: String, val severity: String) : RuntimeEvent()
-    }
-
-    // Flujo caliente (SharedFlow) configurado para soportar ráfagas asíncronas sin retención obsoleta
-    private val _events = MutableSharedFlow<RuntimeEvent>(
+    // Flujo caliente reactivo configurado para OmniEvent
+    private val _events = MutableSharedFlow<OmniEvent>(
         replay = 0, 
         extraBufferCapacity = 64
     )
-    val events: SharedFlow<RuntimeEvent> = _events.asSharedFlow()
+    val events: SharedFlow<OmniEvent> = _events.asSharedFlow()
 
     /**
-     * Emite un evento en tiempo real hacia todos los subsistemas o pantallas suscritas.
+     * Emite un evento en tiempo real (Función nativa esperada por SecureVaultPlugin).
      */
-    suspend fun emitEvent(event: RuntimeEvent) {
+    suspend fun emit(event: OmniEvent) {
         _events.emit(event)
     }
 
     /**
-     * Emite un evento de manera síncrona/inmediata desde contextos donde no es posible usar suspend.
+     * Alias de emisión por compatibilidad con firmas alternativas.
      */
-    fun tryEmitEvent(event: RuntimeEvent): Boolean {
+    suspend fun emitEvent(event: OmniEvent) {
+        _events.emit(event)
+    }
+
+    /**
+     * Emite un evento de manera síncrona/inmediata si es necesario.
+     */
+    fun tryEmitEvent(event: OmniEvent): Boolean {
         return _events.tryEmit(event)
     }
 }
+
+/**
+ * JERARQUÍA OFICIAL DE OMNIEVENT.
+ * Definidos como clases top-level dentro de .core para que las importaciones masivas funcionen.
+ */
+sealed class OmniEvent
+
+// 1. Manejado en TacticalDiagnosticsDrawer y SecureVaultPlugin (requiere 'message')
+data class SystemEvent(val message: String) : OmniEvent()
+
+// 2. Manejado en TacticalDiagnosticsDrawer (requiere 'oldState' y 'newState')
+data class SessionChanged(val oldState: String, val newState: String) : OmniEvent()
+
+// 3. Manejado en TacticalDiagnosticsDrawer (requiere 'type' y 'payload')
+data class PayloadEvent(val type: String, val payload: String) : OmniEvent()
+
+// 4. Manejado en TacticalDiagnosticsDrawer y vistas de estado (requiere 'state')
+data class VaultEvent(val state: String) : OmniEvent()
