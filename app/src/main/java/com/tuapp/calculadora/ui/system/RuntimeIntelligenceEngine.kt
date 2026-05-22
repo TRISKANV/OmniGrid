@@ -1,11 +1,7 @@
 package com.tuapp.calculadora.ui.system
 
 import com.tuapp.calculadora.core.*
-import com.tuapp.calculadora.core.CoreEventBus
-import com.tuapp.calculadora.core.OmniEvent
 import com.tuapp.calculadora.ui.system.model.*
-import com.tuapp.calculadora.ui.system.CoreEventBus
-import com.tuapp.calculadora.ui.system.OmniEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -54,7 +50,7 @@ object RuntimeIntelligenceEngine {
 
         // Gestión reactiva del estado térmico real de la CPU
         if (state.thermal != lastThermalState) {
-            CoreEventBus.publish(OmniEvent.ThermalStateChanged(lastThermalState, state.thermal))
+            CoreEventBus.publish(ThermalStateChanged(lastThermalState.toString(), state.thermal.toString()))
             lastThermalState = state.thermal
         }
 
@@ -63,7 +59,7 @@ object RuntimeIntelligenceEngine {
                 needsReduceBlur = true
                 val msg = "Elevación térmica de hardware. Degradando desenfoque superficial."
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.LOW))
-                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+                CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "THERMAL", severity = "LOW"))
             }
             ThermalState.THROTTLING -> {
                 needsReduceBlur = true
@@ -72,7 +68,7 @@ object RuntimeIntelligenceEngine {
                 val msg = "Thermal Throttling severo. Modulando ciclos de reloj internos."
                 currentAnomalies.add("THERMAL_THROTTLING")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
-                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+                CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "THERMAL", severity = "HIGH"))
             }
             ThermalState.CRITICAL -> {
                 needsReduceBlur = true
@@ -82,7 +78,7 @@ object RuntimeIntelligenceEngine {
                 val msg = "PELIGRO TÉRMICO EN PROCESADOR. Forzando modo UI minimalista."
                 currentAnomalies.add("CRITICAL_THERMAL_OVERLOAD")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
-                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+                CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "THERMAL", severity = "CRITICAL"))
             }
             else -> {}
         }
@@ -93,7 +89,7 @@ object RuntimeIntelligenceEngine {
                 targetedTelemetryDelay = maxOf(targetedTelemetryDelay, 2000L)
                 val msg = "Baja disponibilidad de RAM del sistema. Retrasando buffers secundarios."
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.MEDIUM))
-                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+                CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "MEMORY", severity = "MEDIUM"))
             }
             MemoryPressure.CRITICAL -> {
                 needsSimplifyRendering = true
@@ -101,7 +97,7 @@ object RuntimeIntelligenceEngine {
                 val msg = "Advertencia severa de memoria (LowMemory OS). OOM Inminente."
                 currentAnomalies.add("LOW_MEMORY_CRITICAL")
                 _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.CRITICAL))
-                CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+                CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "MEMORY", severity = "CRITICAL"))
             }
             else -> {}
         }
@@ -119,7 +115,7 @@ object RuntimeIntelligenceEngine {
             val msg = "Sobrecarga en cola interna CoreEventBus. Mitigando pipelines gráficos."
             currentAnomalies.add("RUNTIME_CONGESTION")
             _signals.emit(RuntimeSignal.Warning(msg, RuntimeSignal.Warning.Level.HIGH))
-            CoreEventBus.publish(OmniEvent.HardwareWarning(msg))
+            CoreEventBus.publish(HardwareWarning(message = msg, subsystem = "RUNTIME", severity = "HIGH"))
         }
 
         _anomalies.value = currentAnomalies
