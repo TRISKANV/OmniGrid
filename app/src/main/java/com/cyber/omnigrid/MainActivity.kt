@@ -1,4 +1,4 @@
-package com.tuapp.calculadora 
+package com.tuapp.calculadora // Revisa si tu ruta física real es com.cyber.omnigrid
 
 import com.tuapp.calculadora.core.*
 import android.os.Bundle
@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Configuración Imersiva de la Ventana para la identidad Cyberdeck (OLED-First)
+        // Configuración Inmersiva de la Ventana para la identidad Cyberdeck (OLED-First)
         window.attributes.layoutInDisplayCutoutMode = 
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         
@@ -45,7 +45,8 @@ class MainActivity : ComponentActivity() {
 
         // Notificar al Bus de Eventos Central que el hardware del Cyberdeck está en línea
         activityScope.launch {
-            CoreEventBus.emitEvent(CoreEventBus.RuntimeEvent.SystemBootstrapped(System.currentTimeMillis()))
+            // CORRECCIÓN TÁCTICA: Disparo directo del SystemEvent limpio sin anidación
+            CoreEventBus.emitEvent(SystemEvent(message = "SYSTEM BOOTSTRAPPED: ${System.currentTimeMillis()}"))
         }
 
         setContent {
