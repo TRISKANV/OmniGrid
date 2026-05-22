@@ -50,10 +50,9 @@ fun ModularDashboard(modifier: Modifier = Modifier) {
                         key = { plugin -> plugin.manifest.pluginId }
                     ) { plugin ->
                         // Isolation View: Contenedor por defecto para cada módulo táctico
+                        // CORRECCIÓN: Se eliminó el animateItem() para garantizar compatibilidad con versiones estables de Compose
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateItem() // Animación de Compose para reordenamiento si cambian prioridades
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             plugin.RenderWidget()
                         }
