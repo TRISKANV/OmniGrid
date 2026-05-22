@@ -14,8 +14,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tuapp.calculadora.ui.system.CoreEventBus
-import com.tuapp.calculadora.ui.system.OmniEvent
 import kotlinx.coroutines.flow.collectLatest
 
 data class DiagnosticLog(
@@ -32,28 +30,28 @@ fun TacticalDiagnosticsDrawer(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         CoreEventBus.events.collectLatest { event ->
             val newLog = when (event) {
-                is OmniEvent.HardwareWarning -> DiagnosticLog(
+                is HardwareWarning -> DiagnosticLog(
                     timestamp = System.currentTimeMillis(),
                     tag = "WARN",
                     message = event.message,
                     color = Color(0xFFFF3333)
                 )
-                is OmniEvent.ThermalStateChanged -> DiagnosticLog(
+                is ThermalStateChanged -> DiagnosticLog(
                     timestamp = System.currentTimeMillis(),
                     tag = "THERMAL",
                     message = "TRANSITION: ${event.oldState} -> ${event.newState}",
                     color = Color(0xFFFFB300)
                 )
-                is OmniEvent.PluginSystemEvent -> DiagnosticLog(
+                is PluginSystemEvent -> DiagnosticLog(
                     timestamp = System.currentTimeMillis(),
-                    tag = event.type,
-                    message = event.payload["description"]?.toString() ?: "No descriptor payload available",
+                    tag = event.type.ifEmpty { "PLUGIN" },
+                    message = event.payload.ifEmpty { "No descriptor payload available" },
                     color = Color(0xFF00E5FF)
                 )
-                is OmniEvent.HardwareTelemetryEmitted -> DiagnosticLog(
-                    timestamp = event.state.timestamp,
+                is HardwareTelemetryEmitted -> DiagnosticLog(
+                    timestamp = System.currentTimeMillis(),
                     tag = "METRICS",
-                    message = "CPU: ${String.format("%.1f", event.state.cpu.usagePercentage)}% | Cores: ${event.state.cpu.coreCount}",
+                    message = "HARDWARE STATE: ${event.state}",
                     color = Color(0xFF00FF66).copy(alpha = 0.5f)
                 )
                 else -> null
