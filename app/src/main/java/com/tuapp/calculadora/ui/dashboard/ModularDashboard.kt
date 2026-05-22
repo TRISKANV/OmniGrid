@@ -1,5 +1,6 @@
 package com.tuapp.calculadora.ui.dashboard
 
+import com.tuapp.calculadora.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
