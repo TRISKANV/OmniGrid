@@ -1,8 +1,6 @@
 package com.tuapp.calculadora.ui.system
 
 import com.tuapp.calculadora.core.*
-import com.tuapp.calculadora.core.CoreEventBus
-import com.tuapp.calculadora.core.OmniEvent
 import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
@@ -53,7 +51,9 @@ object RuntimeTelemetryManager {
                 _telemetryState.value = realState
                 
                 updateQueueSize(realState.runtime.eventBusQueueSize)
-                CoreEventBus.publish(OmniEvent.HardwareTelemetryEmitted(realState))
+                
+                // CORRECCIÓN: Invocación directa al evento aplanado
+                CoreEventBus.publish(HardwareTelemetryEmitted(state = realState.toString()))
                 
                 val totalRam = if (realState.ram.totalBytes > 0) realState.ram.totalBytes.toFloat() else 1f
                 val usedRam = realState.ram.runtimeUsedBytes.toFloat()
@@ -64,7 +64,15 @@ object RuntimeTelemetryManager {
                     temperature = realState.battery.temperatureC,
                     timestamp = realState.timestamp
                 )
-                CoreEventBus.publish(OmniEvent.TelemetryEmitted(legacyEntry))
+                
+                // CORRECCIÓN: Mapeo armónico con las propiedades string de TelemetryEmitted verificadas en el Dashboard
+                CoreEventBus.publish(
+                    TelemetryEmitted(
+                        targetServer = "local-runtime",
+                        success = true,
+                        state = "CPU: ${legacyEntry.cpuUsage}% | RAM: ${legacyEntry.ramUsage}%"
+                    )
+                )
                 
                 delay(sampleIntervalMs)
             }
