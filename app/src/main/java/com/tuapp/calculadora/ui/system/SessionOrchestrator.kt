@@ -1,10 +1,10 @@
 package com.tuapp.calculadora.ui.system
 
-// Le agregamos la variable "nombre" que faltaba en la línea 118
+// Cambiamos "nombre" por "name" 
 class MockSessionManifest {
     val sessionId: String = "SESSION_12345"
     val status: String = "ACTIVE"
-    val nombre: String = "OmniUser" 
+    val name: String = "OmniUser" 
 }
 
 /**
@@ -15,10 +15,9 @@ object SessionOrchestrator {
     val isSessionActive: Boolean = true
     val currentToken: String = "OMNI_SYS_TOKEN_MOCK"
     
-    // Las replicamos acá también por si acaso las busca sueltas
     val sessionId: String = "SESSION_12345"
     val status: String = "ACTIVE"
-    val nombre: String = "OmniUser"
+    val name: String = "OmniUser"
 
     fun validateSession() = true
     fun clearSession() { /* No-op */ }
