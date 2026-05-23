@@ -41,7 +41,7 @@ class DiagnosticsPlugin : OmniPlugin {
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var telemetryJob: Job? = null
 
-    // 1. Manifiesto del Plugin: Define quién es y qué hace para el orquestador
+    // 1. Manifiesto del Plugin
     override val manifest = PluginManifest(
         pluginId = "core.diagnostics",
         version = "1.0.0",
@@ -50,11 +50,11 @@ class DiagnosticsPlugin : OmniPlugin {
             PluginCapability.UI_DASHBOARD_WIDGET, 
             PluginCapability.EVENT_STREAMING
         ),
-        priority = 100, // Prioridad Máxima (OS Level) - Se renderizará en la cima del Dashboard
+        priority = 100, // Prioridad Máxima (OS Level)
         requiresForeground = true
     )
 
-    // 2. Estado del Ciclo de Vida: Monitoreado por el RuntimePluginManager
+    // 2. Estado del Ciclo de Vida
     private val _state = MutableStateFlow(PluginState.IDLE)
     override val state: StateFlow<PluginState> = _state.asStateFlow()
 
@@ -69,7 +69,7 @@ class DiagnosticsPlugin : OmniPlugin {
     }
 
     override suspend fun start() {
-        _state.value = PluginState.ACTIVE
+        _state.value = PluginState.RUNNING
         addLog("SYSTEM", "Diagnostics Module Active & Listening", Color(0xFF00FF66))
         
         // Se suscribe al motor central sin acoplarse a otras clases
@@ -82,12 +82,12 @@ class DiagnosticsPlugin : OmniPlugin {
 
     override suspend fun stop() {
         telemetryJob?.cancel()
-        _state.value = PluginState.SUSPENDED
-        addLog("SYSTEM", "Module Suspended", Color.DarkGray)
+        _state.value = PluginState.DISABLED
+        addLog("SYSTEM", "Module Disabled", Color.DarkGray)
     }
 
     override suspend fun recover() {
-        // Degradación elegante: Limpia la memoria si ocurre un error fatal y reinicia la escucha
+        // Degradación elegante
         stop()
         _logs.value = emptyList()
         addLog("RECOVERY", "Diagnostics degraded gracefully. Restarting stream...", Color.Yellow)
@@ -139,7 +139,6 @@ class DiagnosticsPlugin : OmniPlugin {
     }
 
     private fun addLog(log: DiagnosticLog) {
-        // Manipulación atómica inmutable y control estricto de presión de memoria
         val currentList = _logs.value.toMutableList()
         currentList.add(0, log)
         if (currentList.size > 50) { 
