@@ -3,93 +3,137 @@ package com.omnigrid.payload.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.omnigrid.payload.domain.model.*
-import com.omnigrid.payload.domain.repository.PayloadRepository
-import com.omnigrid.payload.runtime.engine.DuckyRuntimeEngine
-import com.omnigrid.payload.runtime.events.PayloadRuntimeEvent
+import com.omnigrid.payload.domain.usecase.*
 import com.omnigrid.payload.runtime.session.RuntimeSessionManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class PayloadTerminalViewModel(
-    private val sessionManager: RuntimeSessionManager,
-    private val repository: PayloadRepository,
-    private val engine: DuckyRuntimeEngine,
-    val sessionId: String? = null
+class PayloadManagerViewModel(
+    private val getPayloads: GetPayloadsUseCase,
+    private val createPayload: CreatePayloadUseCase,
+    private val updatePayload: UpdatePayloadUseCase,
+    private val deletePayload: DeletePayloadUseCase,
+    private val executePayload: ExecutePayloadUseCase,
+    private val manageSession: ManageSessionUseCase,
+    private val sessionManager: RuntimeSessionManager
 ) : ViewModel() {
 
-    val session: StateFlow<PayloadSession?> = sessionId?.let { id ->
-        repository.observeSessionById(id)
-    }?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null) ?: MutableStateFlow(null)
+    private val _filterState = MutableStateFlow(FilterState())
+    val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
 
-    private val _liveEvents = MutableStateFlow<List<LiveTerminalEntry>>(emptyList())
-    val liveEvents: StateFlow<List<LiveTerminalEntry>> = _liveEvents.asStateFlow()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val payloads: StateFlow<List<Payload>> = _filterState
+        .flatMapLatest { filter ->
+            when {
+                filter.query.isNotBlank() -> getPayloads.search(filter.query)
+                filter.onlyFavorites -> getPayloads.favorites()
+                filter.category != null -> getPayloads.byCategory(filter.category)
+                filter.tag != null -> getPayloads.byTag(filter.tag)
+                else -> getPayloads.all()
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _autoScroll = MutableStateFlow(true)
-    val autoScroll: StateFlow<Boolean> = _autoScroll.asStateFlow()
+    val activeSessions: StateFlow<List<PayloadSession>> = sessionManager
+        .observeActiveSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val liveMetrics: StateFlow<LiveMetrics> = session.map { s ->
-        if (s == null) LiveMetrics()
-        else LiveMetrics(
-            progress = s.progress, state = s.state, completedActions = s.completedActions,
-            failedActions = s.failedActions, totalActions = s.totalActions,
-            durationMs = s.duration, transportState = s.transportState, warningCount = s.warnings.size
+    val dashboardStats: StateFlow<DashboardStats> = manageSession
+        .observeDashboardStats()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            DashboardStats(0, 0, 0f, 0)
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LiveMetrics())
 
-    init { observeEngineEvents() }
+    private val _uiEvent = MutableSharedFlow<ManagerUiEvent>()
+    val uiEvent: SharedFlow<ManagerUiEvent> = _uiEvent.asSharedFlow()
 
-    private fun observeEngineEvents() {
+    private val _selectedPayload = MutableStateFlow<Payload?>(null)
+    val selectedPayload: StateFlow<Payload?> = _selectedPayload.asStateFlow()
+
+    fun setQuery(query: String) {
+        _filterState.update { it.copy(query = query) }
+    }
+
+    fun setCategory(category: PayloadCategory?) {
+        _filterState.update { it.copy(category = category, tag = null, onlyFavorites = false) }
+    }
+
+    fun setTag(tag: String?) {
+        _filterState.update { it.copy(tag = tag, category = null, onlyFavorites = false) }
+    }
+
+    fun setFavoritesOnly(only: Boolean) {
+        _filterState.update { it.copy(onlyFavorites = only, category = null, tag = null) }
+    }
+
+    fun selectPayload(payload: Payload?) {
+        _selectedPayload.value = payload
+    }
+
+    fun createPayload(
+        name: String,
+        script: String,
+        description: String = "",
+        category: PayloadCategory = PayloadCategory.UNCATEGORIZED,
+        tags: List<String> = emptyList()
+    ) {
         viewModelScope.launch {
-            engine.events.filter { sessionId == null || it.sessionId == sessionId }.collect { event ->
-                val entry = LiveTerminalEntry(
-                    timestamp = event.timestamp, level = event.toLogLevelLabel(),
-                    message = event.toDisplayMessage(), category = event.toCategory(), isHighlight = event.isHighlightEvent()
-                )
-                _liveEvents.update { current -> (current + entry).takeLast(500) }
+            runCatching {
+                createPayload.invoke(name, script, description, category, tags)
+            }.onSuccess {
+                _uiEvent.emit(ManagerUiEvent.PayloadCreated(it.id))
+            }.onFailure { error ->
+                _uiEvent.emit(ManagerUiEvent.Error(error.message ?: "Create failed"))
             }
         }
     }
 
-    fun cancelSession() { sessionId?.let { sessionManager.cancel(it) } }
-    fun clearLiveEvents() { _liveEvents.value = emptyList() }
-    fun setAutoScroll(enabled: Boolean) { _autoScroll.value = enabled }
-
-    private fun PayloadRuntimeEvent.toLogLevelLabel(): String = when (this) {
-        is PayloadRuntimeEvent.SessionFailed -> "CRIT"
-        is PayloadRuntimeEvent.ActionFailed -> "ERR "
-        is PayloadRuntimeEvent.Warning -> "WARN"
-        is PayloadRuntimeEvent.SessionCompleted -> "INFO"
-        is PayloadRuntimeEvent.ActionCompleted -> "OK  "
-        else -> "DBG "
+    fun executePayload(payloadId: String) {
+        viewModelScope.launch {
+            runCatching {
+                sessionManager.enqueueExecution(payloadId)
+            }.onSuccess { sessionId ->
+                _uiEvent.emit(ManagerUiEvent.ExecutionStarted(sessionId))
+            }.onFailure { error ->
+                _uiEvent.emit(ManagerUiEvent.Error(error.message ?: "Execution failed"))
+            }
+        }
     }
 
-    private fun PayloadRuntimeEvent.toDisplayMessage(): String = when (this) {
-        is PayloadRuntimeEvent.SessionStateChanged -> "SESSION  ${state.name.padEnd(12)} ›  ${sessionId.take(8)}"
-        is PayloadRuntimeEvent.SessionCompleted -> "COMPLETE ${completedActions}/${completedActions + failedActions} actions  ${metrics.totalExecutionMs}ms"
-        is PayloadRuntimeEvent.SessionFailed -> "FAILED   $reason"
-        is PayloadRuntimeEvent.ParseCompleted -> "PARSED   $actionCount actions  ${warnings.size} warnings"
-        is PayloadRuntimeEvent.ActionStarted -> "ACTION   [$actionIndex] $actionType"
-        is PayloadRuntimeEvent.ActionCompleted -> "DONE     [$actionIndex] ${latencyMs}ms  [$completed/$total]"
-        is PayloadRuntimeEvent.ActionFailed -> "FAIL     [$actionIndex] $reason"
-        is PayloadRuntimeEvent.TransportStateChanged -> "TRANSPORT ${state.name}"
-        is PayloadRuntimeEvent.Warning -> "WARNING  $message"
+    fun deletePayload(payloadId: String) {
+        viewModelScope.launch {
+            runCatching {
+                deletePayload.invoke(payloadId)
+            }.onSuccess {
+                _uiEvent.emit(ManagerUiEvent.PayloadDeleted(payloadId))
+            }.onFailure { error ->
+                _uiEvent.emit(ManagerUiEvent.Error(error.message ?: "Delete failed"))
+            }
+        }
     }
 
-    private fun PayloadRuntimeEvent.toCategory(): TerminalCategory = when (this) {
-        is PayloadRuntimeEvent.SessionStateChanged, is PayloadRuntimeEvent.SessionCompleted, is PayloadRuntimeEvent.SessionFailed -> TerminalCategory.SESSION
-        is PayloadRuntimeEvent.ActionStarted, is PayloadRuntimeEvent.ActionCompleted, is PayloadRuntimeEvent.ActionFailed -> TerminalCategory.ACTION
-        is PayloadRuntimeEvent.TransportStateChanged -> TerminalCategory.TRANSPORT
-        is PayloadRuntimeEvent.ParseCompleted -> TerminalCategory.PARSE
-        is PayloadRuntimeEvent.Warning -> TerminalCategory.WARNING
+    fun toggleFavorite(payloadId: String) {
+        // Optimistic update vía repository
     }
 
-    private fun PayloadRuntimeEvent.isHighlightEvent(): Boolean = this is PayloadRuntimeEvent.SessionCompleted || this is PayloadRuntimeEvent.SessionFailed || this is PayloadRuntimeEvent.SessionStateChanged
+    fun cancelSession(sessionId: String) {
+        sessionManager.cancel(sessionId)
+    }
 }
 
-data class LiveTerminalEntry(val timestamp: Long, val level: String, val message: String, val category: TerminalCategory, val isHighlight: Boolean = false)
-enum class TerminalCategory { SESSION, ACTION, TRANSPORT, PARSE, WARNING }
-data class LiveMetrics(
-    val progress: Float = 0f, val state: ExecutionState = ExecutionState.QUEUED, val completedActions: Int = 0,
-    val failedActions: Int = 0, val totalActions: Int = 0, val durationMs: Long = 0L,
-    val transportState: TransportState = TransportState.DISCONNECTED, val warningCount: Int = 0
+data class FilterState(
+    val query: String = "",
+    val category: PayloadCategory? = null,
+    val tag: String? = null,
+    val onlyFavorites: Boolean = false
 )
+
+sealed class ManagerUiEvent {
+    data class PayloadCreated(val id: String) : ManagerUiEvent()
+    data class PayloadDeleted(val id: String) : ManagerUiEvent()
+    data class ExecutionStarted(val sessionId: String) : ManagerUiEvent()
+    data class Error(val message: String) : ManagerUiEvent()
+}
