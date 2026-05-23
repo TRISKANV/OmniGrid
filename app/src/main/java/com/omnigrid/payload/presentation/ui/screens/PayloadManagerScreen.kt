@@ -20,7 +20,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.omnigrid.payload.domain.model.*
-import com.omnigrid.payload.presentation.viewmodel.*
+import com.omnigrid.payload.domain.usecase.DashboardStats // ⚠️ IMPORT EXPLÍCITO FALTANTE
+import com.omnigrid.payload.presentation.viewmodel.PayloadManagerViewModel // ⚠️ IMPORT EXPLÍCITO FALTANTE
+import com.omnigrid.payload.presentation.viewmodel.ManagerUiEvent // ⚠️ IMPORT EXPLÍCITO FALTANTE
+import com.omnigrid.payload.presentation.viewmodel.FilterState // ⚠️ IMPORT EXPLÍCITO FALTANTE
 import kotlinx.coroutines.flow.collectLatest
 
 object OmniColors {
@@ -198,7 +201,15 @@ fun PayloadCard(payload: Payload, isRunning: Boolean, onExecute: () -> Unit, onE
                     Text(payload.name, color = OmniColors.textPrimary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (payload.description.isNotBlank()) Text(payload.description, color = OmniColors.textSecondary, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton(onClick = onFavoriteToggle, modifier = Modifier.size(24.dp)) { Icon(if (payload.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (payload.isFavorite) OmniColors.warning else OmniColors.textSecondary, modifier = Modifier.size(16.dp)) }
+                // ⚠️ CORRECCIÓN AQUÍ: Quitamos StarBorder que no existía nativamente y usamos Star con opacidad
+                IconButton(onClick = onFavoriteToggle, modifier = Modifier.size(24.dp)) { 
+                    Icon(
+                        Icons.Default.Star, 
+                        "Favorite", 
+                        tint = if (payload.isFavorite) OmniColors.warning else OmniColors.textSecondary.copy(alpha = 0.3f), 
+                        modifier = Modifier.size(16.dp)
+                    ) 
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -215,7 +226,13 @@ fun PayloadCard(payload: Payload, isRunning: Boolean, onExecute: () -> Unit, onE
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CompactActionButton("EDIT", OmniColors.secondary, onEdit)
                     CompactActionButton("DEL", OmniColors.error, onDelete)
-                    CompactActionButton(if (isRunning) "RUNNING" else "EXEC", if (isRunning) OmniColors.warning else OmniColors.primary, if (isRunning) {} else onExecute, true)
+                    // ⚠️ CORRECCIÓN AQUÍ: Evitamos devolver un 'Any' pasando una función lambda limpia
+                    CompactActionButton(
+                        label = if (isRunning) "RUNNING" else "EXEC", 
+                        color = if (isRunning) OmniColors.warning else OmniColors.primary, 
+                        onClick = { if (!isRunning) onExecute() }, 
+                        filled = true
+                    )
                 }
             }
         }
