@@ -19,7 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.omnigrid.payload.domain.model.*
-import com.omnigrid.payload.presentation.viewmodel.*
+
+// ⚠️ IMPORTS EXPLÍCITOS AGREGADOS AQUÍ ⚠️
+import com.omnigrid.payload.presentation.viewmodel.PayloadTerminalViewModel
+import com.omnigrid.payload.presentation.viewmodel.LiveMetrics
+import com.omnigrid.payload.presentation.viewmodel.LiveTerminalEntry
+import com.omnigrid.payload.presentation.viewmodel.TerminalCategory
 
 @Composable
 fun PayloadTerminalScreen(
