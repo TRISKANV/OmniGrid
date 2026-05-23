@@ -2,10 +2,6 @@ package com.omnigrid.payload.domain.model
 
 import java.util.UUID
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Payload — Entidad principal
-// ─────────────────────────────────────────────────────────────────────────────
-
 data class Payload(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -21,10 +17,6 @@ data class Payload(
     val lastExecutedAt: Long? = null,
     val metadata: Map<String, String> = emptyMap()
 )
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Taxonomía y Estados
-// ─────────────────────────────────────────────────────────────────────────────
 
 enum class PayloadCategory(val label: String, val colorHex: String) {
     UNCATEGORIZED("Uncategorized", "#555566"),
@@ -44,10 +36,6 @@ enum class TransportState {
     DISCONNECTED, CONNECTING, CONNECTED, TRANSMITTING, ERROR
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sesión y Registro de Eventos
-// ─────────────────────────────────────────────────────────────────────────────
-
 data class PayloadSession(
     val sessionId: String = UUID.randomUUID().toString(),
     val payloadId: String,
@@ -62,7 +50,19 @@ data class PayloadSession(
     val transportState: TransportState = TransportState.DISCONNECTED,
     val logs: List<SessionLog> = emptyList(),
     val warnings: List<String> = emptyList()
-)
+) {
+    // ⚠️ ESTAS ERAN LAS PROPIEDADES QUE FALTABAN
+    val duration: Long
+        get() = (endedAt ?: System.currentTimeMillis()) - startedAt
+
+    val isTerminal: Boolean
+        get() = state in listOf(
+            ExecutionState.COMPLETED,
+            ExecutionState.FAILED,
+            ExecutionState.CANCELLED,
+            ExecutionState.TIMEOUT
+        )
+}
 
 data class SessionLog(
     val id: String = UUID.randomUUID().toString(),
