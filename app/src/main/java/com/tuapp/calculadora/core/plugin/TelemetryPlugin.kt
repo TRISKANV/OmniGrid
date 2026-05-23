@@ -45,14 +45,14 @@ class TelemetryPlugin(private val context: Context) : OmniPlugin {
     }
 
     override suspend fun start() {
-        _state.value = PluginState.ACTIVE
+        _state.value = PluginState.RUNNING
         // Inicia el parseo del Kernel Linux y la RAM
         RuntimeTelemetryManager.startMonitoring()
     }
 
     override suspend fun stop() {
         RuntimeTelemetryManager.stopMonitoring()
-        _state.value = PluginState.SUSPENDED
+        _state.value = PluginState.DISABLED
     }
 
     override suspend fun recover() {
