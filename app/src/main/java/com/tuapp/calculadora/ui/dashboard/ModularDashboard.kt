@@ -20,13 +20,10 @@ import com.tuapp.calculadora.ui.system.SessionOrchestrator
 
 @Composable
 fun ModularDashboard(modifier: Modifier = Modifier) {
-    // Escucha el Estado Global del Kernel
     val sessionState by SessionOrchestrator.sessionState.collectAsState()
-    
-    // Lista reactiva de plugins vivos renderizables inyectada por el PluginManager
     val activePlugins by RuntimePluginManager.activePlugins.collectAsState()
 
-    Crossfade(targetState = sessionState == MockSessionStatus.ACTIVE, label = "System_Boot_Transition") { active ->
+    Crossfade(targetState = sessionState == MockSessionStatus.ACTIVE, label = "Boot_Transition") { active ->
         if (!active) {
             BootSequenceOverlay()
         } else {
@@ -35,11 +32,8 @@ fun ModularDashboard(modifier: Modifier = Modifier) {
                     .fillMaxSize()
                     .background(Color(0xFF030303))
             ) {
-                // Cabecera del Cyberdeck
                 SystemHeader()
 
-                // Renderizado Dinámico de Plugins.
-                // El Dashboard es ciego: NO conoce los módulos, solo ejecuta sus widgets.
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp),
@@ -49,11 +43,7 @@ fun ModularDashboard(modifier: Modifier = Modifier) {
                         items = activePlugins,
                         key = { plugin -> plugin.manifest.pluginId }
                     ) { plugin ->
-                        // Isolation View: Contenedor por defecto para cada módulo táctico
-                        // CORRECCIÓN: Se eliminó el animateItem() para garantizar compatibilidad con versiones estables de Compose
-                        Box(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             plugin.RenderWidget()
                         }
                     }
@@ -100,17 +90,7 @@ private fun SystemHeader() {
 
 @Composable
 private fun BootSequenceOverlay() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "WAITING FOR KERNEL BOOTLOADER...",
-            color = Color.Red,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 14.sp
-        )
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        Text("WAITING FOR KERNEL BOOTLOADER...", color = Color.Red, fontFamily = FontFamily.Monospace)
     }
 }
