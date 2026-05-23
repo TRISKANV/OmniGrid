@@ -15,47 +15,48 @@ enum class PluginCapability {
     THERMAL_ANALYSIS,
     EVENT_STREAMING,
     DIAGNOSTICS,
-    UI_DASHBOARD_WIDGET
+    UI_DASHBOARD_WIDGET,
+    STRESS_TESTING // Nueva capacidad para el módulo de caos
 }
 
 /**
- * Estados del ciclo de vida monitoreados por el Health System.
+ * Estados del Supervisor Runtime (Micro-kernel).
  */
 enum class PluginState {
     IDLE, 
     INITIALIZING, 
-    ACTIVE, 
+    RUNNING,      // Reemplaza a ACTIVE
     DEGRADED, 
-    SUSPENDED, 
-    CRASHED
+    CRASHED, 
+    RECOVERING,   // Intento de reinicio
+    DISABLED      // Módulo expulsado por fallo crítico recurrente
 }
 
 /**
- * Manifiesto del Plugin. Definición estática para el Bootloader.
+ * Manifiesto del Plugin.
  */
 data class PluginManifest(
     val pluginId: String,
     val version: String,
     val capabilities: Set<PluginCapability>,
     val dependencies: Set<PluginCapability> = emptySet(),
-    val priority: Int = 0, // 100 = Critical OS, 0 = Background Utility
+    val priority: Int = 0,
     val requiresForeground: Boolean = false
 )
 
 /**
- * Contrato Core para todo módulo dentro de OmniGrid.
+ * Contrato Core de OmniGrid.
  */
 interface OmniPlugin {
     val manifest: PluginManifest
     val state: StateFlow<PluginState>
 
-    // Lifecycle Hooks
+    // Lifecycle Hooks controlados por el Sandbox Layer
     suspend fun initialize()
     suspend fun start()
     suspend fun stop()
-    suspend fun recover() // Degradación elegante o reinicio
+    suspend fun recover()
 
-    // Capa Dinámica de UI. Si el plugin no tiene UI, retorna Unit.
     @Composable
     fun RenderWidget()
 }
