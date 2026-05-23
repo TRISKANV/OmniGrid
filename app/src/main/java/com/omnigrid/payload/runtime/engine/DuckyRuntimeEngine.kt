@@ -71,7 +71,9 @@ class DuckyRuntimeEngine(
         val executableActions = parseResult.actions.filter { it !is DuckyAction.Rem && it !is DuckyAction.DefaultDelay }
 
         for (action in executableActions) {
-            ensureActive()
+            // ⚠️ CORRECCIÓN AQUÍ: Le decimos a qué contexto pertenece
+            currentCoroutineContext().ensureActive() 
+            
             val actionStart = System.currentTimeMillis()
             emit(PayloadRuntimeEvent.ActionStarted(sessionId, action.index, action::class.simpleName ?: "Unknown", actionStart))
 
