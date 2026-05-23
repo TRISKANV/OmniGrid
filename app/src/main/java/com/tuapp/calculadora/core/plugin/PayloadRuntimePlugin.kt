@@ -13,7 +13,9 @@ import androidx.compose.ui.unit.dp
 import com.omnigrid.payload.domain.repository.PayloadRepository
 import com.omnigrid.payload.domain.usecase.*
 import com.omnigrid.payload.presentation.ui.screens.*
-import com.omnigrid.payload.presentation.viewmodel.*
+import com.omnigrid.payload.presentation.viewmodel.PayloadManagerViewModel // ⚠️ IMPORT EXPLÍCITO FALTANTE
+import com.omnigrid.payload.presentation.viewmodel.PayloadEditorViewModel // ⚠️ IMPORT EXPLÍCITO FALTANTE
+import com.omnigrid.payload.presentation.viewmodel.PayloadTerminalViewModel // ⚠️ IMPORT EXPLÍCITO FALTANTE
 import com.omnigrid.payload.runtime.engine.DuckyRuntimeEngine
 import com.omnigrid.payload.runtime.session.RuntimeSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +33,6 @@ class PayloadRuntimePlugin(
     private val repository: PayloadRepository,
     private val sessionManager: RuntimeSessionManager,
     private val engine: DuckyRuntimeEngine,
-    // UseCases inyectados desde el Bootloader
     private val getPayloads: GetPayloadsUseCase,
     private val createPayload: CreatePayloadUseCase,
     private val updatePayload: UpdatePayloadUseCase,
@@ -44,7 +45,7 @@ class PayloadRuntimePlugin(
         pluginId = "core.tactical.payloads",
         version = "1.0.0",
         capabilities = setOf(PluginCapability.PAYLOAD_EXECUTION, PluginCapability.UI_DASHBOARD_WIDGET),
-        priority = 95 // Alta prioridad en el renderizado
+        priority = 95
     )
 
     private val _state = MutableStateFlow(PluginState.IDLE)
@@ -52,29 +53,15 @@ class PayloadRuntimePlugin(
 
     private val currentRoute = MutableStateFlow<PayloadWidgetRoute>(PayloadWidgetRoute.Manager)
 
-    override suspend fun initialize() {
-        _state.value = PluginState.INITIALIZING
-    }
-
-    override suspend fun start() {
-        _state.value = PluginState.RUNNING
-    }
-
-    override suspend fun stop() {
-        _state.value = PluginState.DISABLED
-    }
-
-    override suspend fun recover() {
-        stop()
-        currentRoute.value = PayloadWidgetRoute.Manager
-        start()
-    }
+    override suspend fun initialize() { _state.value = PluginState.INITIALIZING }
+    override suspend fun start() { _state.value = PluginState.RUNNING }
+    override suspend fun stop() { _state.value = PluginState.DISABLED }
+    override suspend fun recover() { stop(); currentRoute.value = PayloadWidgetRoute.Manager; start() }
 
     @Composable
     override fun RenderWidget() {
         val route by currentRoute.collectAsState()
 
-        // Contenedor que aísla el módulo del resto del Dashboard visualmente
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -86,11 +73,8 @@ class PayloadRuntimePlugin(
             Crossfade(targetState = route, label = "PayloadRouter") { currentScreen ->
                 when (currentScreen) {
                     is PayloadWidgetRoute.Manager -> {
-                        // Instanciamos el ViewModel manualmente (Sin Hilt)
                         val viewModel = remember {
-                            PayloadManagerViewModel(
-                                getPayloads, createPayload, updatePayload, deletePayload, executePayload, manageSession, sessionManager
-                            )
+                            PayloadManagerViewModel(getPayloads, createPayload, updatePayload, deletePayload, executePayload, manageSession, sessionManager)
                         }
                         PayloadManagerScreen(
                             viewModel = viewModel,
