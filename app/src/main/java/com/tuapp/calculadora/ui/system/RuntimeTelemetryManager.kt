@@ -9,12 +9,16 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import com.tuapp.calculadora.ui.system.model.*
+import com.tuapp.calculadora.core.plugin.RuntimePluginManager // Para acceder a DEBUG_SAFE_MODE
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicInteger
+import android.util.Log
 
 object RuntimeTelemetryManager {
+    private const val TAG = "OMNI_TELEMETRY"
+    
     private var contextRef: Context? = null
     private var externalScopeRef: CoroutineScope? = null
 
@@ -32,7 +36,7 @@ object RuntimeTelemetryManager {
     val telemetryState: StateFlow<HardwareState> = _telemetryState.asStateFlow()
 
     private var samplingJob: Job? = null
-    private var sampleIntervalMs = 1000L
+    private var sampleIntervalMs = 2000L // Incrementado para estabilización física
 
     private var lastCpuTime = 0L
     private var lastAppCpuTime = 0L
@@ -45,36 +49,49 @@ object RuntimeTelemetryManager {
     fun startMonitoring() {
         val scope = externalScopeRef ?: return
         samplingJob?.cancel()
+        
         samplingJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                val realState = collectRealMetrics()
-                _telemetryState.value = realState
-                
-                updateQueueSize(realState.runtime.eventBusQueueSize)
-                
-                // CORRECCIÓN: Invocación directa al evento aplanado
-                CoreEventBus.publish(HardwareTelemetryEmitted(state = realState.toString()))
-                
-                val totalRam = if (realState.ram.totalBytes > 0) realState.ram.totalBytes.toFloat() else 1f
-                val usedRam = realState.ram.runtimeUsedBytes.toFloat()
-                
-                val legacyEntry = TelemetryEntry(
-                    cpuUsage = realState.cpu.usagePercentage,
-                    ramUsage = (usedRam / totalRam) * 100f,
-                    temperature = realState.battery.temperatureC,
-                    timestamp = realState.timestamp
-                )
-                
-                // CORRECCIÓN: Mapeo armónico con las propiedades string de TelemetryEmitted verificadas en el Dashboard
-                CoreEventBus.publish(
-                    TelemetryEmitted(
-                        targetServer = "local-runtime",
-                        success = true,
-                        state = "CPU: ${legacyEntry.cpuUsage}% | RAM: ${legacyEntry.ramUsage}%"
+                try {
+                    // 1. ESCUDO: Respetar el Safe Mode
+                    if (RuntimePluginManager.DEBUG_SAFE_MODE) {
+                        Log.d(TAG, "Safe Mode activo. Saltando recolección de telemetría pesada.")
+                        delay(sampleIntervalMs.coerceAtLeast(2000L))
+                        continue
+                    }
+
+                    val realState = collectRealMetrics()
+                    _telemetryState.value = realState
+                    
+                    updateQueueSize(realState.runtime.eventBusQueueSize)
+                    
+                    // Publicación de eventos
+                    CoreEventBus.publish(HardwareTelemetryEmitted(state = realState.toString()))
+                    
+                    val totalRam = if (realState.ram.totalBytes > 0) realState.ram.totalBytes.toFloat() else 1f
+                    val usedRam = realState.ram.runtimeUsedBytes.toFloat()
+                    
+                    val legacyEntry = TelemetryEntry(
+                        cpuUsage = realState.cpu.usagePercentage,
+                        ramUsage = (usedRam / totalRam) * 100f,
+                        temperature = realState.battery.temperatureC,
+                        timestamp = realState.timestamp
                     )
-                )
+                    
+                    CoreEventBus.publish(
+                        TelemetryEmitted(
+                            targetServer = "local-runtime",
+                            success = true,
+                            state = "CPU: ${legacyEntry.cpuUsage}% | RAM: ${legacyEntry.ramUsage}%"
+                        )
+                    )
+                } catch (e: Exception) {
+                    // 2. ESCUDO: Contención de fallas
+                    Log.e(TAG, "Falla aislada en el ciclo de telemetría. La aplicación no crasheará.", e)
+                }
                 
-                delay(sampleIntervalMs)
+                // Aseguramos que el delay no sea abusivo
+                delay(sampleIntervalMs.coerceAtLeast(1000L))
             }
         }
     }
@@ -85,7 +102,7 @@ object RuntimeTelemetryManager {
     }
 
     fun updateSamplingInterval(intervalMs: Long) {
-        this.sampleIntervalMs = intervalMs
+        this.sampleIntervalMs = intervalMs.coerceAtLeast(1000L) // Prevenir polling suicida
     }
 
     fun incrementCoroutineCount() = coroutineCounter.incrementAndGet()
@@ -139,8 +156,9 @@ object RuntimeTelemetryManager {
         )
 
         val ctx = contextRef
-        val batteryMetrics = if (ctx != null) {
-            val batteryManager = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        // 3. ESCUDO: Casteo seguro de BatteryManager
+        val batteryManager = ctx?.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        val batteryMetrics = if (batteryManager != null) {
             val pct = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             val isCharging = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS) == BatteryManager.BATTERY_STATUS_CHARGING
             BatteryMetrics(
@@ -231,13 +249,19 @@ object RuntimeTelemetryManager {
     }
 
     private fun estimateCpuUsage(): Float {
+        // 4. ESCUDO: Evitar acceso denegado continuo a /proc/stat en Android 8+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return fallbackCpuEstimation()
+        }
+
         return try {
             val reader = RandomAccessFile("/proc/stat", "r")
             val load = reader.readLine()
+            reader.close()
+            
             val toks = load.split(" +".toRegex())
             val idle = toks[4].toLong()
             val cpu = toks[1].toLong() + toks[2].toLong() + toks[3].toLong() + toks[5].toLong() + toks[6].toLong() + toks[7].toLong()
-            reader.close()
 
             val totalDiff = (cpu + idle) - lastCpuTime
             val cpuDiff = cpu - lastAppCpuTime
@@ -253,9 +277,13 @@ object RuntimeTelemetryManager {
 
             if (totalDiff > 0) ((cpuDiff.toFloat() / totalDiff.toFloat()) * 100f).coerceIn(0f, 100f) else 0.0f
         } catch (e: Exception) {
-            val availableProcessors = Runtime.getRuntime().availableProcessors().toFloat()
-            val loadedThreads = Thread.activeCount().toFloat()
-            (loadedThreads / (availableProcessors * 12f) * 100f).coerceIn(5f, 90f)
+            fallbackCpuEstimation()
         }
+    }
+    
+    private fun fallbackCpuEstimation(): Float {
+        val availableProcessors = Runtime.getRuntime().availableProcessors().toFloat()
+        val loadedThreads = Thread.activeCount().toFloat()
+        return (loadedThreads / (availableProcessors * 12f) * 100f).coerceIn(5f, 90f)
     }
 }
