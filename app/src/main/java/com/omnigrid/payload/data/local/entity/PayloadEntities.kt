@@ -110,12 +110,17 @@ fun PayloadSession.toEntity(): PayloadSessionEntity = PayloadSessionEntity(
     warnings = warnings.toJsonString(),
     logs = logs.toJsonString(),
     transportState = transportState.name,
-    metrics = "{}" // Las métricas se guardan por separado en el update final para no penalizar el render
+    metrics = "{}"
 )
 
-// ── Helpers Nativos Nativos (Sin Gson)
+// ── Helpers Nativos (Sin Gson) con prevención de Type Erasure ──
+
+@JvmName("stringListToJsonString")
 private fun List<String>.toJsonString(): String = "[${joinToString(",") { "\"$it\"" }}]"
+
 private fun Map<String, String>.toJsonString(): String = "{${entries.joinToString(",") { "\"${it.key}\":\"${it.value}\"" }}}"
+
+@JvmName("sessionLogListToJsonString")
 private fun List<SessionLog>.toJsonString(): String = org.json.JSONArray(map { log ->
     org.json.JSONObject().apply {
         put("id", log.id)
